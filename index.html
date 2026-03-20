@@ -633,6 +633,7 @@ function toggleTopic(id, containerId, isSettings) {
 }
 
 function startFeed() {
+  saveTopics();
   showScreen('feed');
   renderFilterTabs();
   renderFeed('all');
@@ -747,6 +748,7 @@ function showSettings() {
 }
 
 function saveSettings() {
+  saveTopics();
   showScreen('feed');
   renderFilterTabs();
   renderFeed(activeFilter);
@@ -758,8 +760,48 @@ function showScreen(id) {
   document.getElementById('screen-' + id).classList.add('active');
 }
 
+// ===== STORAGE =====
+const tg = window.Telegram?.WebApp;
+
+function saveTopics() {
+  const data = JSON.stringify([...selectedTopics]);
+  if (tg?.CloudStorage) {
+    tg.CloudStorage.setItem("kiosk_topics", data);
+  } else {
+    localStorage.setItem("kiosk_topics", data);
+  }
+}
+
+function loadTopics(callback) {
+  if (tg?.CloudStorage) {
+    tg.CloudStorage.getItem("kiosk_topics", (err, value) => {
+      if (!err && value) {
+        try { JSON.parse(value).forEach(t => selectedTopics.add(t)); } catch(e) {}
+      }
+      callback();
+    });
+  } else {
+    const stored = localStorage.getItem("kiosk_topics");
+    if (stored) {
+      try { JSON.parse(stored).forEach(t => selectedTopics.add(t)); } catch(e) {}
+    }
+    callback();
+  }
+}
+
 // ===== INIT =====
-renderTopicsGrid('topics-grid');
+document.getElementById("screen-onboarding").classList.remove("active");
+
+loadTopics(() => {
+  if (selectedTopics.size > 0) {
+    showScreen("feed");
+    renderFilterTabs();
+    renderFeed("all");
+  } else {
+    showScreen("onboarding");
+    renderTopicsGrid("topics-grid");
+  }
+});
 </script>
 </body>
 </html>
