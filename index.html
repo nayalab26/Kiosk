@@ -984,6 +984,8 @@ const SAMPLE_POSTS = {
 
 const BOT_TOKEN = '8624327731:AAG5aS4V-X9rd8gAv9u-lpyxWqDezQH8myM';
 const ADMIN_ID = '238292';
+const SUPABASE_URL = 'https://vueetwklqcgehirsvqno.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ZDoB5YyIUMWKASBVnA8pZQ_TtjC8sFr';
 
 // ===== STATE =====
 let selectedTopics = new Set();
@@ -1268,7 +1270,7 @@ function closeChannel() {
 
 
 // ===== REGISTER =====
-let selectedCategory = null;
+let selectedCategories = new Set();
 let previewData = null;
 let usernameTimer = null;
 
@@ -1277,10 +1279,14 @@ function renderCategoryGrid() {
   grid.innerHTML = '';
   TOPICS.forEach(topic => {
     const opt = document.createElement('div');
-    opt.className = 'category-option' + (selectedCategory === topic.id ? ' selected' : '');
+    opt.className = 'category-option' + (selectedCategories.has(topic.id) ? ' selected' : '');
     opt.innerHTML = `<span>${topic.emoji}</span><span>${topic.name}</span>`;
     opt.onclick = () => {
-      selectedCategory = topic.id;
+      if (selectedCategories.has(topic.id)) {
+        selectedCategories.delete(topic.id);
+      } else {
+        selectedCategories.add(topic.id);
+      }
       renderCategoryGrid();
       checkRegisterForm();
     };
@@ -1348,31 +1354,52 @@ document.addEventListener("DOMContentLoaded", () => { const ci = document.getEle
 
 function checkRegisterForm() {
   const contact = document.getElementById('reg-contact').value.trim();
-  const canSubmit = previewData && selectedCategory && contact.length > 2;
+  const canSubmit = previewData && selectedCategories.size > 0 && contact.length > 2;
   document.getElementById('reg-submit-btn').style.display = canSubmit ? 'block' : 'none';
 }
 
 async function submitRegistration() {
   const handle = document.getElementById('reg-username').value.replace('@', '').trim();
   const contact = document.getElementById('reg-contact').value.trim();
-  const topic = TOPICS.find(t => t.id === selectedCategory);
+  const topicNames = [...selectedCategories].map(id => { const t = TOPICS.find(t => t.id === id); return t ? t.emoji + ' ' + t.name : id; }).join(', ');
+
+  // Save to Supabase
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/applications`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`
+      },
+      body: JSON.stringify({
+        handle: handle,
+        title: previewData?.title || handle,
+        description: previewData?.description || '',
+        categories: topicNames,
+        contact: contact,
+        subscribers: previewData?.members_count || 0,
+        status: 'pending'
+      })
+    });
+  } catch(e) { console.error('Supabase error:', e); }
 
   // Send to bot admin
-  const message = `📬 Новая заявка на размещение канала!\n\n` +
+  const message = `📬 Новая заявка на размещение!\n\n` +
     `📢 Канал: @${handle}\n` +
     `🏷 Название: ${previewData?.title || handle}\n` +
-    `📂 Категория: ${topic?.emoji} ${topic?.name}\n` +
+    `📂 Категории: ${topicNames}\n` +
     `👤 Контакт: ${contact}\n` +
-    `📝 Описание: ${previewData?.description || '—'}`;
+    `👥 Подписчиков: ${previewData?.members_count || '—'}\n` +
+    `📝 Описание: ${previewData?.description || '—'}\n\n` +
+    `Для одобрения напишите боту /approve_${handle}\n` +
+    `Для отклонения: /reject_${handle}`;
 
   try {
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: ADMIN_ID,
-        text: message
-      })
+      body: JSON.stringify({ chat_id: ADMIN_ID, text: message })
     });
   } catch(e) {}
 
@@ -1380,8 +1407,8 @@ async function submitRegistration() {
   document.getElementById('register-form').style.display = 'none';
   document.getElementById('register-success').classList.add('visible');
 
-  // Reset form
-  selectedCategory = null;
+  // Reset
+  selectedCategories = new Set();
   previewData = null;
   document.getElementById('reg-username').value = '';
   document.getElementById('reg-contact').value = '';
