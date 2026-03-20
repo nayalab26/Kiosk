@@ -182,18 +182,24 @@ async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
         await update.message.reply_text(
             "Мы запомнили тебя и пришлём уведомление как только рассмотрим заявку. Обычно до 24 часов."
-            "Обычно это занимает до 24 часов."
         )
 
 async def post_init(application):
+    from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
+
     await application.bot.set_my_commands([
-        ("start", "🗞 Открыть Киоск"),
-        ("applications", "📬 Список заявок"),
-        ("approve", "✅ Одобрить канал"),
-        ("reject", "❌ Отклонить канал"),
-        ("remove", "🗑 Удалить канал"),
-        ("help", "❓ Помощь"),
-    ])
+        ("start", "Открыть Киоск"),
+        ("help", "Помощь"),
+    ], scope=BotCommandScopeAllPrivateChats())
+
+    await application.bot.set_my_commands([
+        ("start", "Открыть Киоск"),
+        ("applications", "Список заявок"),
+        ("approve", "Одобрить канал"),
+        ("reject", "Отклонить канал"),
+        ("remove", "Удалить канал"),
+        ("help", "Помощь"),
+    ], scope=BotCommandScopeChat(chat_id=ADMIN_ID))
 
 def main():
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
