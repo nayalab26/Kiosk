@@ -181,7 +181,7 @@ async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     json={"chat_id": chat_id}
                 )
         await update.message.reply_text(
-            "👋 Привет! Мы запомнили тебя и пришлём уведомление как только рассмотрим заявку.
+            "Мы запомнили тебя и пришлём уведомление как только рассмотрим заявку. Обычно до 24 часов.
 
 "
             "Обычно это занимает до 24 часов."
