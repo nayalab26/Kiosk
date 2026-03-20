@@ -3,11 +3,11 @@ import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8624327731:AAG5aS4V-X9rd8gAv9u-lpyxWqDezQH8myM")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://nayalab26.github.io/Kiosk/")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", "238292"))
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://vueetwklqcgehirsvqno.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "sb_secret_OIhQT0Wo8Pjji4DiWoFWrA_aH-YATE3")
+ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
