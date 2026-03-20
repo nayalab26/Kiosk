@@ -474,6 +474,142 @@
     text-transform: uppercase;
     margin-bottom: 12px;
   }
+
+  /* ===== CHANNEL SCREEN ===== */
+  #screen-channel {
+    background: var(--bg);
+    padding-bottom: 80px;
+  }
+
+  .channel-screen-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: rgba(14,14,14,0.95);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+  }
+
+  .channel-hero {
+    padding: 24px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .channel-hero-avatar {
+    width: 72px; height: 72px;
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+    margin-bottom: 14px;
+    box-shadow: 0 0 30px rgba(245,200,66,0.15);
+  }
+
+  .channel-hero-name {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .channel-hero-handle {
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+
+  .channel-hero-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 280px;
+    margin-bottom: 16px;
+  }
+
+  .channel-stats {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+
+  .channel-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .channel-stat-value {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .channel-stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .btn-subscribe-big {
+    width: 100%;
+    max-width: 280px;
+    background: var(--accent);
+    border: none;
+    color: #000;
+    border-radius: var(--radius);
+    padding: 14px;
+    font-family: 'Unbounded', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-subscribe-big:active { background: var(--accent2); transform: scale(0.98); }
+  .btn-subscribe-big.subscribed {
+    background: var(--surface2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .channel-posts-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    padding: 20px 20px 12px;
+  }
+
+  .channel-posts-list {
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .channel-post-item {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .channel-post-time {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
 </style>
 </head>
 <body>
@@ -558,36 +694,70 @@ const TOPICS = [
 const SAMPLE_POSTS = {
   news: [
     { channel: 'Baza', handle: 'bazabazon', emoji: '📡', bg: '#1a2a3a', text: 'В Москве прошёл масштабный форум по технологиям будущего. Более 5000 участников обсудили развитие ИИ и цифровой экономики.', time: '15 мин назад' },
+    { channel: 'Baza', handle: 'bazabazon', emoji: '📡', bg: '#1a2a3a', text: 'Крупный пожар в торговом центре Екатеринбурга: эвакуированы сотни людей, пострадавших нет.', time: '2 часа назад' },
+    { channel: 'Baza', handle: 'bazabazon', emoji: '📡', bg: '#1a2a3a', text: 'Рубль укрепился до минимума за три месяца на фоне роста нефтяных котировок.', time: '4 часа назад' },
     { channel: 'Осторожно, новости', handle: 'ostorozhno_novosti', emoji: '⚡', bg: '#2a1a1a', text: 'Главные события дня: экономика, политика и общество. Читайте самое важное без воды и лишних слов.', time: '1 час назад' },
+    { channel: 'Осторожно, новости', handle: 'ostorozhno_novosti', emoji: '⚡', bg: '#2a1a1a', text: 'Госдума приняла поправки к закону о занятости. Что изменится для работодателей и сотрудников.', time: '3 часа назад' },
+    { channel: 'Осторожно, новости', handle: 'ostorozhno_novosti', emoji: '⚡', bg: '#2a1a1a', text: 'Инфляция в марте составила 7.4% — выше прогнозов ЦБ. Аналитики ждут реакции регулятора.', time: '5 часов назад' },
     { channel: 'Varlamov News', handle: 'varlamov_news', emoji: '🏙', bg: '#1a2a1a', text: 'Как изменились российские города за последние 10 лет? Большой разбор с фотографиями и статистикой.', time: '2 часа назад' },
+    { channel: 'Varlamov News', handle: 'varlamov_news', emoji: '🏙', bg: '#1a2a1a', text: 'Почему в России так мало велодорожек и что с этим делать. Опыт Казани и Москвы.', time: '6 часов назад' },
+    { channel: 'Varlamov News', handle: 'varlamov_news', emoji: '🏙', bg: '#1a2a1a', text: 'Самые красивые новые кварталы России — неожиданный топ от Варламова с разбором архитектуры.', time: '1 день назад' },
   ],
   tech: [
     { channel: 'Ян Топлес', handle: 'yantopless', emoji: '🧠', bg: '#1a1a2a', text: 'GPT-5 уже здесь: что умеет новая модель и чем отличается от предыдущих версий. Простым языком о сложном.', time: '30 мин назад' },
-    { channel: 'AI Новости', handle: 'ai_newz', emoji: '🤖', bg: '#0a1a2a', text: 'Нейросеть научилась генерировать видео длиной до 10 минут. Разбираем как это работает и что будет дальше.', time: '3 часа назад' },
+    { channel: 'Ян Топлес', handle: 'yantopless', emoji: '🧠', bg: '#1a1a2a', text: 'Почему квантовые компьютеры не заменят обычные — и когда всё-таки заменят. Честный разбор.', time: '4 часа назад' },
+    { channel: 'Ян Топлес', handle: 'yantopless', emoji: '🧠', bg: '#1a1a2a', text: 'Starlink в России: как работает, сколько стоит и законно ли это. Всё что вы хотели знать.', time: '1 день назад' },
+    { channel: 'AI Новости', handle: 'ai_newz', emoji: '🤖', bg: '#0a1a2a', text: 'Нейросеть научилась генерировать видео длиной до 10 минут. Разбираем как это работает.', time: '3 часа назад' },
+    { channel: 'AI Новости', handle: 'ai_newz', emoji: '🤖', bg: '#0a1a2a', text: 'Яндекс выпустил новую версию YandexGPT — сравниваем с конкурентами по 5 параметрам.', time: '6 часов назад' },
+    { channel: 'AI Новости', handle: 'ai_newz', emoji: '🤖', bg: '#0a1a2a', text: 'ИИ написал код который прошёл код-ревью у старшего разработчика. Что это значит для индустрии.', time: '1 день назад' },
   ],
   sport: [
-    { channel: 'Sport Express', handle: 'sport_express_ru', emoji: '🏆', bg: '#1a2a0a', text: 'ЦСКА победил Спартак в дерби со счётом 2:1. Голы забили Чалов и Медина. Обзор матча и лучшие моменты.', time: '45 мин назад' },
+    { channel: 'Sport Express', handle: 'sport_express_ru', emoji: '🏆', bg: '#1a2a0a', text: 'ЦСКА победил Спартак в дерби со счётом 2:1. Голы забили Чалов и Медина. Обзор матча.', time: '45 мин назад' },
+    { channel: 'Sport Express', handle: 'sport_express_ru', emoji: '🏆', bg: '#1a2a0a', text: 'Зенит вышел в четвертьфинал еврокубка после победы над турецким клубом 3:0.', time: '3 часа назад' },
+    { channel: 'Sport Express', handle: 'sport_express_ru', emoji: '🏆', bg: '#1a2a0a', text: 'Российские теннисисты завоевали три медали на турнире в Дубае. Итоги недели.', time: '7 часов назад' },
     { channel: 'Губерниев', handle: 'RealGuberniev', emoji: '🎙', bg: '#2a1a0a', text: 'Российские биатлонисты взяли две медали на этапе Кубка мира. Горжусь нашими спортсменами!', time: '2 часа назад' },
+    { channel: 'Губерниев', handle: 'RealGuberniev', emoji: '🎙', bg: '#2a1a0a', text: 'Сборная по хоккею разгромила соперника 6:1 в товарищеском матче. Комментирую каждый гол!', time: '5 часов назад' },
+    { channel: 'Губерниев', handle: 'RealGuberniev', emoji: '🎙', bg: '#2a1a0a', text: 'Почему российский спорт переживает ренессанс — моё мнение после 30 лет в профессии.', time: '1 день назад' },
   ],
   food: [
     { channel: 'Рецепты', handle: 'recipes_ru', emoji: '👨‍🍳', bg: '#2a1a0a', text: 'Борщ за 30 минут: рецепт без лишних слов. Ингредиенты, пошаговые фото и секрет насыщенного цвета.', time: '1 час назад' },
+    { channel: 'Рецепты', handle: 'recipes_ru', emoji: '👨‍🍳', bg: '#2a1a0a', text: 'Паста карбонара как в Риме: главная ошибка которую все делают и как её избежать.', time: '4 часа назад' },
+    { channel: 'Рецепты', handle: 'recipes_ru', emoji: '👨‍🍳', bg: '#2a1a0a', text: 'Пять соусов которые изменят ваши будние ужины. Готовятся за 10 минут, хранятся неделю.', time: '1 день назад' },
     { channel: 'ChefMarket', handle: 'chefmarket', emoji: '🥗', bg: '#0a2a1a', text: 'Топ-5 блюд которые можно приготовить из остатков в холодильнике. Минимум продуктов — максимум вкуса.', time: '4 часа назад' },
+    { channel: 'ChefMarket', handle: 'chefmarket', emoji: '🥗', bg: '#0a2a1a', text: 'Весеннее меню: 7 лёгких салатов с первой зеленью. Готовим пока дача ещё не открылась.', time: '8 часов назад' },
+    { channel: 'ChefMarket', handle: 'chefmarket', emoji: '🥗', bg: '#0a2a1a', text: 'Как правильно хранить продукты чтобы они не портились. Лайфхаки от шеф-поваров.', time: '1 день назад' },
   ],
   finance: [
-    { channel: 'IF Stocks', handle: 'if_stocks', emoji: '📈', bg: '#0a2a0a', text: 'Сбербанк отчитался за квартал: прибыль выросла на 18%. Стоит ли покупать акции сейчас? Разбор аналитиков.', time: '20 мин назад' },
-    { channel: 'ДОХОДЪ', handle: 'dohod', emoji: '💼', bg: '#1a1a0a', text: 'Куда инвестировать в 2025 году: облигации, акции или недвижимость? Сравниваем инструменты по риску и доходности.', time: '3 часа назад' },
+    { channel: 'IF Stocks', handle: 'if_stocks', emoji: '📈', bg: '#0a2a0a', text: 'Сбербанк отчитался за квартал: прибыль выросла на 18%. Стоит ли покупать акции сейчас?', time: '20 мин назад' },
+    { channel: 'IF Stocks', handle: 'if_stocks', emoji: '📈', bg: '#0a2a0a', text: 'ЦБ поднял ставку до 17%. Что это значит для вкладов, ипотеки и фондового рынка.', time: '3 часа назад' },
+    { channel: 'IF Stocks', handle: 'if_stocks', emoji: '📈', bg: '#0a2a0a', text: 'Топ-10 дивидендных акций на 2025 год: кто платит больше всех и насколько это надёжно.', time: '7 часов назад' },
+    { channel: 'ДОХОДЪ', handle: 'dohod', emoji: '💼', bg: '#1a1a0a', text: 'Куда инвестировать в 2025 году: облигации, акции или недвижимость? Сравниваем инструменты.', time: '3 часа назад' },
+    { channel: 'ДОХОДЪ', handle: 'dohod', emoji: '💼', bg: '#1a1a0a', text: 'Как собрать портфель на 50 000 рублей: пошаговая инструкция для начинающих.', time: '6 часов назад' },
+    { channel: 'ДОХОДЪ', handle: 'dohod', emoji: '💼', bg: '#1a1a0a', text: 'Золото против биткоина: что лучше защищает от инфляции по данным за 10 лет.', time: '1 день назад' },
   ],
   life: [
-    { channel: 'Литвин', handle: 'litvintm', emoji: '✨', bg: '#2a0a2a', text: 'Почему утренние ритуалы меняют жизнь: мой личный опыт после 6 месяцев экспериментов. Делюсь результатами.', time: '2 часа назад' },
+    { channel: 'Литвин', handle: 'litvintm', emoji: '✨', bg: '#2a0a2a', text: 'Почему утренние ритуалы меняют жизнь: мой личный опыт после 6 месяцев экспериментов.', time: '2 часа назад' },
+    { channel: 'Литвин', handle: 'litvintm', emoji: '✨', bg: '#2a0a2a', text: 'Как я бросил смотреть новости и что произошло через месяц. Честный отчёт.', time: '5 часов назад' },
+    { channel: 'Литвин', handle: 'litvintm', emoji: '✨', bg: '#2a0a2a', text: 'Три книги которые изменили моё отношение к деньгам. Рекомендую каждому.', time: '1 день назад' },
     { channel: 'Ида Галич', handle: 'GALICH_onok', emoji: '🌸', bg: '#2a1a2a', text: 'Неделя в Стамбуле: лучшие рестораны, районы и неочевидные места. Сохраняй перед поездкой!', time: '5 часов назад' },
+    { channel: 'Ида Галич', handle: 'GALICH_onok', emoji: '🌸', bg: '#2a1a2a', text: 'Весенний гардероб за разумные деньги: что купить чтобы выглядеть стильно без переплат.', time: '8 часов назад' },
+    { channel: 'Ида Галич', handle: 'GALICH_onok', emoji: '🌸', bg: '#2a1a2a', text: 'Как я организовала пространство в маленькой квартире. До и после с фотографиями.', time: '1 день назад' },
   ],
   music: [
     { channel: 'Exile Music', handle: 'exilemusic13', emoji: '🎸', bg: '#0a0a2a', text: 'Новый альбом уже вышел! Год работы, 12 треков и море эмоций. Слушайте на всех платформах.', time: '1 час назад' },
+    { channel: 'Exile Music', handle: 'exilemusic13', emoji: '🎸', bg: '#0a0a2a', text: 'Репетиция перед туром: показываю как выглядит подготовка к большим концертам изнутри.', time: '5 часов назад' },
+    { channel: 'Exile Music', handle: 'exilemusic13', emoji: '🎸', bg: '#0a0a2a', text: 'Топ-5 альбомов которые я слушал на повторе всю зиму. Делюсь плейлистом.', time: '1 день назад' },
     { channel: 'Джиган', handle: 'geegunchill', emoji: '🎤', bg: '#1a0a2a', text: 'Записали новый трек с неожиданным гостем. Угадайте кто это по фрагменту текста 👇', time: '6 часов назад' },
+    { channel: 'Джиган', handle: 'geegunchill', emoji: '🎤', bg: '#1a0a2a', text: 'Концерт в Питере собрал 15 000 человек. Спасибо каждому кто пришёл — вы лучшие!', time: '2 дня назад' },
+    { channel: 'Джиган', handle: 'geegunchill', emoji: '🎤', bg: '#1a0a2a', text: 'Как я начинал: история от первого трека до стадионов. Большой пост о пути в музыке.', time: '3 дня назад' },
   ],
   games: [
-    { channel: 'DTF Games', handle: 'dtf_games', emoji: '🕹', bg: '#0a1a0a', text: 'GTA VI перенесли на осень 2026: что известно о новой части и почему это может быть лучшей игрой десятилетия.', time: '10 мин назад' },
-    { channel: 'Игромания', handle: 'igromania', emoji: '🎯', bg: '#1a0a0a', text: 'Лучшие инди-игры марта 2025: 10 проектов которые вы могли пропустить. Обзоры и оценки редакции.', time: '3 часа назад' },
+    { channel: 'DTF Games', handle: 'dtf_games', emoji: '🕹', bg: '#0a1a0a', text: 'GTA VI перенесли на осень 2026: что известно о новой части и почему это лучшая игра десятилетия.', time: '10 мин назад' },
+    { channel: 'DTF Games', handle: 'dtf_games', emoji: '🕹', bg: '#0a1a0a', text: 'Обзор Elden Ring DLC: 40 часов в новом контенте. Стоит ли покупать если не прошли основную игру.', time: '4 часа назад' },
+    { channel: 'DTF Games', handle: 'dtf_games', emoji: '🕹', bg: '#0a1a0a', text: 'PlayStation 6 выйдет в 2026: что известно о характеристиках и цене. Разбор утечек.', time: '8 часов назад' },
+    { channel: 'Игромания', handle: 'igromania', emoji: '🎯', bg: '#1a0a0a', text: 'Лучшие инди-игры марта 2025: 10 проектов которые вы могли пропустить. Обзоры редакции.', time: '3 часа назад' },
+    { channel: 'Игромания', handle: 'igromania', emoji: '🎯', bg: '#1a0a0a', text: 'Baldurs Gate 3 получила патч с новым контентом спустя год после релиза. Что добавили.', time: '7 часов назад' },
+    { channel: 'Игромания', handle: 'igromania', emoji: '🎯', bg: '#1a0a0a', text: 'Топ мобильных игр которые не высасывают деньги. Честная подборка без донатных ловушек.', time: '1 день назад' },
   ],
 };
 
@@ -677,7 +847,14 @@ function renderFeed(filter) {
     const topicsToShow = filter === 'all' ? [...selectedTopics] : [filter];
     topicsToShow.forEach(id => {
       const topicPosts = SAMPLE_POSTS[id] || [];
-      topicPosts.forEach(p => posts.push({ ...p, topicId: id }));
+      // Показываем только последний пост каждого канала
+      const seen = new Set();
+      topicPosts.forEach(p => {
+        if (!seen.has(p.handle)) {
+          seen.add(p.handle);
+          posts.push({ ...p, topicId: id });
+        }
+      });
     });
 
     // Shuffle
@@ -695,11 +872,13 @@ function renderFeed(filter) {
       const card = document.createElement('div');
       card.className = 'post-card';
       card.style.animationDelay = (i * 0.05) + 's';
+      card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.handle); };
+      card.style.cursor = 'pointer';
       card.innerHTML = `
         <div class="post-header">
           <div class="channel-avatar" style="background:${post.bg}">${post.emoji}</div>
           <div class="channel-info">
-            <div class="channel-name">${post.channel}</div>
+            <div class="channel-name" style="cursor:pointer" onclick="openChannel('${post.handle}')">${post.channel}</div>
             <div class="post-time">${post.time}</div>
           </div>
           <div class="post-topic-badge">${topic?.emoji || ''} ${topic?.name || ''}</div>
@@ -711,7 +890,7 @@ function renderFeed(filter) {
             ${isSubscribed ? '✓ Подписан' : '+ Подписаться'}
           </button>
           <button class="btn-read" onclick="openChannel('${post.handle}')">
-            Читать →
+            Открыть канал →
           </button>
         </div>
       `;
@@ -760,6 +939,109 @@ function showScreen(id) {
   document.getElementById('screen-' + id).classList.add('active');
 }
 
+
+// ===== CHANNEL INFO =====
+const CHANNEL_INFO = {
+  bazabazon:           { name: 'Baza', desc: 'Независимое СМИ. Оперативно о ЧП, криминале и актуальных новостях России.', subscribers: '1.2М', posts: '30/день', emoji: '📡', bg: '#1a2a3a' },
+  ostorozhno_novosti:  { name: 'Осторожно, новости', desc: 'Главные новости дня и их ёмкий обзор от команды «Редакции» Пивоварова.', subscribers: '890К', posts: '15/день', emoji: '⚡', bg: '#2a1a1a' },
+  varlamov_news:       { name: 'Varlamov News', desc: 'Ежедневные новости с аналитикой от Ильи Варламова: урбанистика, общество, политика.', subscribers: '1.0М', posts: '10/день', emoji: '🏙', bg: '#1a2a1a' },
+  yantopless:          { name: 'Ян Топлес', desc: 'Поп-наука простыми словами. Факты, разборы трендов и всё об ИИ без скуки.', subscribers: '650К', posts: '5/день', emoji: '🧠', bg: '#1a1a2a' },
+  ai_newz:             { name: 'AI Новости', desc: 'Всё о нейросетях и искусственном интеллекте. Первыми о главном.', subscribers: '320К', posts: '8/день', emoji: '🤖', bg: '#0a1a2a' },
+  sport_express_ru:    { name: 'Sport Express', desc: 'Главный спортивный медиа России. Футбол, хоккей, баскетбол и всё остальное.', subscribers: '780К', posts: '20/день', emoji: '🏆', bg: '#1a2a0a' },
+  RealGuberniev:       { name: 'Губерниев', desc: 'Дмитрий Губерниев — острые реплики и шутки о спорте и жизни.', subscribers: '430К', posts: '5/день', emoji: '🎙', bg: '#2a1a0a' },
+  recipes_ru:          { name: 'Рецепты', desc: 'Простые и вкусные рецепты на каждый день. Готовим быстро и без лишних слов.', subscribers: '510К', posts: '4/день', emoji: '👨‍🍳', bg: '#2a1a0a' },
+  chefmarket:          { name: 'ChefMarket', desc: 'Лучшие блюда, лайфхаки на кухне и вдохновение для ваших кулинарных экспериментов.', subscribers: '280К', posts: '3/день', emoji: '🥗', bg: '#0a2a1a' },
+  if_stocks:           { name: 'IF Stocks', desc: 'Аналитика и обзоры фондового рынка. Всё что нужно знать инвестору.', subscribers: '720К', posts: '10/день', emoji: '📈', bg: '#0a2a0a' },
+  dohod:               { name: 'ДОХОДЪ', desc: 'Всё об инвестициях и экономике. Объективно, без лишнего шума.', subscribers: '490К', posts: '6/день', emoji: '💼', bg: '#1a1a0a' },
+  finkrolik:           { name: 'Кролик с Неглинной', desc: 'Агрегатор финансовых новостей. Всё важное за день одним взглядом.', subscribers: '210К', posts: '12/день', emoji: '🐇', bg: '#0a1a1a' },
+  litvintm:            { name: 'Литвин', desc: 'Михаил Литвин — о жизни, бизнесе и личностном росте с тёплой авторской интонацией.', subscribers: '380К', posts: '3/день', emoji: '✨', bg: '#2a0a2a' },
+  GALICH_onok:         { name: 'Ида Галич', desc: 'Лайфстайл, путешествия и проекты. Личный блог одного из самых искренних авторов TG.', subscribers: '290К', posts: '2/день', emoji: '🌸', bg: '#2a1a2a' },
+  exilemusic13:        { name: 'Exile Music', desc: 'Личный канал стримера и музыканта Ильи Яцкевича — живо, искренне и по-человечески.', subscribers: '160К', posts: '2/день', emoji: '🎸', bg: '#0a0a2a' },
+  geegunchill:         { name: 'Джиган', desc: 'Рэпер рассказывает о музыке, спорте и семье. Без фильтров и пафоса.', subscribers: '540К', posts: '3/день', emoji: '🎤', bg: '#1a0a2a' },
+  dtf_games:           { name: 'DTF Games', desc: 'Игровые новости, обзоры и мнения от редакции DTF. Всё о мире видеоигр.', subscribers: '420К', posts: '8/день', emoji: '🕹', bg: '#0a1a0a' },
+  igromania:           { name: 'Игромания', desc: 'Легендарный игровой журнал теперь в Telegram. Обзоры, новости, инсайды.', subscribers: '350К', posts: '6/день', emoji: '🎯', bg: '#1a0a0a' },
+};
+
+function openChannel(handle) {
+  const info = CHANNEL_INFO[handle] || { name: handle, desc: 'Telegram канал', subscribers: '—', posts: '—', emoji: '📢', bg: '#1a1a1a' };
+  const isSubscribed = subscribedChannels.has(handle);
+  const posts = Object.values(SAMPLE_POSTS).flat().filter(p => p.handle === handle).slice(0, 3);
+
+  document.getElementById('channel-screen-title').textContent = info.name;
+
+  const postsHtml = posts.length > 0
+    ? posts.map(p => `
+        <div class="channel-post-item">
+          ${p.text}
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
+            <div class="channel-post-time">${p.time}</div>
+            <button onclick="readInTelegram('${handle}')" style="background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:8px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;">
+              Читать →
+            </button>
+          </div>
+        </div>`).join('')
+    : '<div class="empty-state"><div class="emoji">📭</div><p>Нет постов</p></div>';
+
+  document.getElementById('channel-content').innerHTML = `
+    <div class="channel-hero">
+      <div class="channel-hero-avatar" style="background:${info.bg}">${info.emoji}</div>
+      <div class="channel-hero-name">${info.name}</div>
+      <div class="channel-hero-handle">@${handle}</div>
+      <div class="channel-hero-desc">${info.desc}</div>
+      <div class="channel-stats">
+        <div class="channel-stat">
+          <div class="channel-stat-value">${info.subscribers}</div>
+          <div class="channel-stat-label">подписчиков</div>
+        </div>
+        <div class="channel-stat">
+          <div class="channel-stat-value">${info.posts}</div>
+          <div class="channel-stat-label">постов</div>
+        </div>
+      </div>
+      <button class="btn-subscribe-big ${isSubscribed ? 'subscribed' : ''}" 
+        id="channel-sub-btn"
+        onclick="toggleSubscribeChannel('${handle}')">
+        ${isSubscribed ? '✓ Вы подписаны' : '+ Подписаться на канал'}
+      </button>
+    </div>
+    <div class="channel-posts-label">Последние посты</div>
+    <div class="channel-posts-list">${postsHtml}</div>
+  `;
+
+  showScreen('channel');
+}
+
+function toggleSubscribeChannel(handle) {
+  const btn = document.getElementById('channel-sub-btn');
+  if (subscribedChannels.has(handle)) {
+    subscribedChannels.delete(handle);
+    btn.textContent = '+ Подписаться на канал';
+    btn.classList.remove('subscribed');
+  } else {
+    subscribedChannels.add(handle);
+    btn.textContent = '✓ Вы подписаны';
+    btn.classList.add('subscribed');
+    // Open in Telegram too
+    const url = `https://t.me/${handle}`;
+    if (window.Telegram?.WebApp) {
+      Telegram.WebApp.openTelegramLink(url);
+    }
+  }
+}
+
+function readInTelegram(handle) {
+  const url = `https://t.me/${handle}`;
+  if (window.Telegram?.WebApp) {
+    Telegram.WebApp.openTelegramLink(url);
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+function closeChannel() {
+  showScreen('feed');
+}
+
 // ===== STORAGE =====
 const tg = window.Telegram?.WebApp;
 
@@ -803,5 +1085,14 @@ loadTopics(() => {
   }
 });
 </script>
+
+<!-- CHANNEL -->
+<div id="screen-channel" class="screen">
+  <div class="channel-screen-header">
+    <button class="btn-back" onclick="closeChannel()">←</button>
+    <div class="settings-title" id="channel-screen-title">Канал</div>
+  </div>
+  <div id="channel-content"></div>
+</div>
 </body>
 </html>
