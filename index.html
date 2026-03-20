@@ -1363,7 +1363,6 @@ document.addEventListener("DOMContentLoaded", () => { const ci = document.getEle
 function checkRegisterForm() {
   const contact = document.getElementById('reg-contact').value.trim();
   const canSubmit = previewData && selectedCategories.size > 0 && contact.length > 2;
-  document.getElementById('reg-bot-section').style.display = canSubmit ? 'block' : 'none';
   document.getElementById('reg-submit-btn').style.display = canSubmit ? 'block' : 'none';
 }
 
@@ -1427,6 +1426,19 @@ async function submitRegistration() {
       })
     });
   } catch(e) {}
+
+  // Send via Telegram WebApp sendData
+  if (window.Telegram?.WebApp?.sendData) {
+    const payload = JSON.stringify({
+      handle: handle,
+      title: previewData?.title || handle,
+      description: previewData?.description || '',
+      categories: topicNames,
+      contact: contact,
+      subscribers: previewData?.members_count || 0
+    });
+    Telegram.WebApp.sendData(payload);
+  }
 
   // Show success
   document.getElementById('register-form').style.display = 'none';
@@ -1547,17 +1559,6 @@ loadTopics(() => {
       <div class="form-hint">Мы напишем вам для подтверждения</div>
     </div>
 
-    <!-- Step 4: Start bot -->
-    <div class="form-group" id="reg-bot-section" style="display:none">
-      <div class="form-label">Последний шаг</div>
-      <div class="register-intro" style="margin:0">
-        <div class="register-intro-title">📩 Напишите нашему боту</div>
-        <div class="register-intro-text">Чтобы получить уведомление о решении по заявке, напишите <b>@Kiosk_lenta_Bot</b> любое сообщение. Это позволит боту отправить вам ответ.</div>
-        <br>
-        <button class="btn-primary" style="margin-top:4px" onclick="openBot()">Написать боту →</button>
-      </div>
-    </div>
-
     <!-- Submit -->
     <button class="btn-primary" id="reg-submit-btn" style="display:none" onclick="submitRegistration()">
       Подать заявку →
@@ -1572,5 +1573,11 @@ loadTopics(() => {
     <button class="btn-primary" style="margin-top:16px" onclick="showScreen('feed')">Вернуться в ленту</button>
   </div>
 </div>
+<script>
+window.onerror = function(msg, url, line) {
+  document.body.innerHTML = '<div style="color:white;padding:20px;font-family:sans-serif"><h2>Ошибка загрузки</h2><p>' + msg + '</p><p>Строка: ' + line + '</p></div>';
+  return false;
+};
+</script>
 </body>
 </html>
