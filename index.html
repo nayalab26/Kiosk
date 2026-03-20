@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Киоск</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Unbounded:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0e;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --accent: #f5c842;
+    --accent2: #e8a020;
+    --text: #f0ede6;
+    --text-muted: #888;
+    --border: #2e2e2e;
+    --radius: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ===== SCREENS ===== */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ===== ONBOARDING ===== */
+  #screen-onboarding {
+    padding: 40px 24px 32px;
+    justify-content: space-between;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+
+  #screen-onboarding::before {
+    content: '';
+    position: absolute;
+    top: -100px; right: -80px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(245,200,66,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .onboarding-header { text-align: center; padding-top: 20px; }
+
+  .kiosk-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .kiosk-logo-icon {
+    width: 52px; height: 52px;
+    background: var(--accent);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+  }
+
+  .kiosk-logo-text {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: var(--text);
+  }
+
+  .onboarding-subtitle {
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .topics-section { flex: 1; padding: 32px 0; }
+
+  .topics-label {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .topics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .topic-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    user-select: none;
+  }
+
+  .topic-card:active { transform: scale(0.97); }
+
+  .topic-card.selected {
+    background: rgba(245, 200, 66, 0.12);
+    border-color: var(--accent);
+  }
+
+  .topic-emoji { font-size: 22px; line-height: 1; }
+
+  .topic-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.2;
+  }
+
+  .topic-check {
+    margin-left: auto;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .topic-card.selected .topic-check {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .topic-card.selected .topic-check::after {
+    content: '✓';
+    font-size: 11px;
+    color: #000;
+    font-weight: 700;
+  }
+
+  .onboarding-footer {}
+
+  .hint-text {
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: 'Unbounded', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+
+  .btn-primary:active { transform: scale(0.98); background: var(--accent2); }
+  .btn-primary:disabled { opacity: 0.4; pointer-events: none; }
+
+  /* ===== FEED ===== */
+  #screen-feed { background: var(--bg); }
+
+  .feed-header {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: rgba(14,14,14,0.95);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+  }
+
+  .feed-logo {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .feed-logo span {
+    background: var(--accent);
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .btn-settings {
+    background: var(--surface);
+    border: none;
+    color: var(--text-muted);
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .filter-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .filter-tabs::-webkit-scrollbar { display: none; }
+
+  .filter-tab {
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .filter-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 600;
+  }
+
+  .feed-list {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 80px;
+  }
+
+  .post-card {
+    background: var(--surface);
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    transition: transform 0.15s;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .post-card:active { transform: scale(0.99); }
+
+  .post-header {
+    padding: 14px 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .channel-avatar {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .channel-info {}
+  .channel-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .post-time {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .post-topic-badge {
+    margin-left: auto;
+    background: var(--surface2);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .post-content {
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .post-image {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 48px;
+  }
+
+  .post-actions {
+    padding: 10px 16px 14px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .btn-subscribe {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 10px;
+    padding: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-subscribe:active { background: rgba(245,200,66,0.1); }
+  .btn-subscribe.subscribed {
+    background: rgba(245,200,66,0.1);
+    color: var(--text-muted);
+    border-color: var(--border);
+  }
+
+  .btn-read {
+    flex: 2;
+    background: var(--accent);
+    border: none;
+    color: #000;
+    border-radius: 10px;
+    padding: 9px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-read:active { background: var(--accent2); }
+
+  /* ===== BOTTOM NAV ===== */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(14,14,14,0.97);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 0 20px;
+    z-index: 20;
+  }
+
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 6px 0;
+    transition: all 0.2s;
+  }
+
+  .nav-icon { font-size: 22px; line-height: 1; }
+  .nav-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .nav-item.active .nav-label { color: var(--accent); }
+  .nav-item.active .nav-icon { filter: drop-shadow(0 0 6px rgba(245,200,66,0.6)); }
+
+  /* ===== LOADING ===== */
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    gap: 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== EMPTY ===== */
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text-muted);
+  }
+  .empty-state .emoji { font-size: 48px; margin-bottom: 16px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  /* ===== SETTINGS SCREEN ===== */
+  #screen-settings {
+    background: var(--bg);
+    padding: 20px;
+  }
+
+  .settings-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .btn-back {
+    background: var(--surface);
+    border: none;
+    color: var(--text);
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .settings-title {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .settings-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ONBOARDING -->
+<div id="screen-onboarding" class="screen active">
+  <div class="onboarding-header">
+    <div class="kiosk-logo">
+      <div class="kiosk-logo-icon">🗞</div>
+      <div class="kiosk-logo-text">Киоск</div>
+    </div>
+    <p class="onboarding-subtitle">Выбери темы — получай только то, что интересно тебе</p>
+  </div>
+
+  <div class="topics-section">
+    <div class="topics-label">Выбери темы</div>
+    <div class="topics-grid" id="topics-grid"></div>
+  </div>
+
+  <div class="onboarding-footer">
+    <p class="hint-text">Выбери хотя бы одну тему</p>
+    <button class="btn-primary" id="btn-start" disabled onclick="startFeed()">
+      Открыть ленту →
+    </button>
+  </div>
+</div>
+
+<!-- FEED -->
+<div id="screen-feed" class="screen">
+  <div class="feed-header">
+    <div class="feed-logo">🗞 Киоск <span>ЛЕНТА</span></div>
+    <button class="btn-settings" onclick="showSettings()">⚙️</button>
+  </div>
+  <div class="filter-tabs" id="filter-tabs"></div>
+  <div class="feed-list" id="feed-list"></div>
+  <div class="bottom-nav">
+    <div class="nav-item active">
+      <div class="nav-icon">📰</div>
+      <div class="nav-label">Лента</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon">🔍</div>
+      <div class="nav-label">Поиск</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon">🔖</div>
+      <div class="nav-label">Сохранённое</div>
+    </div>
+    <div class="nav-item">
+      <div class="nav-icon">👤</div>
+      <div class="nav-label">Профиль</div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div id="screen-settings" class="screen">
+  <div class="settings-header">
+    <button class="btn-back" onclick="showScreen('feed')">←</button>
+    <div class="settings-title">Настройки</div>
+  </div>
+  <div class="settings-section-label">Мои темы</div>
+  <div class="topics-grid" id="settings-topics-grid"></div>
+  <br>
+  <button class="btn-primary" onclick="saveSettings()">Сохранить</button>
+</div>
+
+<script>
+// ===== DATA =====
+const TOPICS = [
+  { id: 'news',    emoji: '📰', name: 'Новости',     channels: ['bazabazon', 'ostorozhno_novosti', 'varlamov_news'] },
+  { id: 'tech',    emoji: '💻', name: 'Технологии',  channels: ['yantopless', 'ai_newz'] },
+  { id: 'sport',   emoji: '⚽', name: 'Спорт',       channels: ['sport_express_ru', 'RealGuberniev'] },
+  { id: 'food',    emoji: '🍳', name: 'Кулинария',   channels: ['recipes_ru', 'chefmarket'] },
+  { id: 'finance', emoji: '💰', name: 'Финансы',     channels: ['if_stocks', 'dohod', 'finkrolik'] },
+  { id: 'life',    emoji: '🎭', name: 'Лайфстайл',   channels: ['litvintm', 'GALICH_onok'] },
+  { id: 'music',   emoji: '🎵', name: 'Музыка',      channels: ['exilemusic13', 'geegunchill'] },
+  { id: 'games',   emoji: '🎮', name: 'Игры',        channels: ['dtf_games', 'igromania'] },
+];
+
+// Sample posts per topic
+const SAMPLE_POSTS = {
+  news: [
+    { channel: 'Baza', handle: 'bazabazon', emoji: '📡', bg: '#1a2a3a', text: 'В Москве прошёл масштабный форум по технологиям будущего. Более 5000 участников обсудили развитие ИИ и цифровой экономики.', time: '15 мин назад' },
+    { channel: 'Осторожно, новости', handle: 'ostorozhno_novosti', emoji: '⚡', bg: '#2a1a1a', text: 'Главные события дня: экономика, политика и общество. Читайте самое важное без воды и лишних слов.', time: '1 час назад' },
+    { channel: 'Varlamov News', handle: 'varlamov_news', emoji: '🏙', bg: '#1a2a1a', text: 'Как изменились российские города за последние 10 лет? Большой разбор с фотографиями и статистикой.', time: '2 часа назад' },
+  ],
+  tech: [
+    { channel: 'Ян Топлес', handle: 'yantopless', emoji: '🧠', bg: '#1a1a2a', text: 'GPT-5 уже здесь: что умеет новая модель и чем отличается от предыдущих версий. Простым языком о сложном.', time: '30 мин назад' },
+    { channel: 'AI Новости', handle: 'ai_newz', emoji: '🤖', bg: '#0a1a2a', text: 'Нейросеть научилась генерировать видео длиной до 10 минут. Разбираем как это работает и что будет дальше.', time: '3 часа назад' },
+  ],
+  sport: [
+    { channel: 'Sport Express', handle: 'sport_express_ru', emoji: '🏆', bg: '#1a2a0a', text: 'ЦСКА победил Спартак в дерби со счётом 2:1. Голы забили Чалов и Медина. Обзор матча и лучшие моменты.', time: '45 мин назад' },
+    { channel: 'Губерниев', handle: 'RealGuberniev', emoji: '🎙', bg: '#2a1a0a', text: 'Российские биатлонисты взяли две медали на этапе Кубка мира. Горжусь нашими спортсменами!', time: '2 часа назад' },
+  ],
+  food: [
+    { channel: 'Рецепты', handle: 'recipes_ru', emoji: '👨‍🍳', bg: '#2a1a0a', text: 'Борщ за 30 минут: рецепт без лишних слов. Ингредиенты, пошаговые фото и секрет насыщенного цвета.', time: '1 час назад' },
+    { channel: 'ChefMarket', handle: 'chefmarket', emoji: '🥗', bg: '#0a2a1a', text: 'Топ-5 блюд которые можно приготовить из остатков в холодильнике. Минимум продуктов — максимум вкуса.', time: '4 часа назад' },
+  ],
+  finance: [
+    { channel: 'IF Stocks', handle: 'if_stocks', emoji: '📈', bg: '#0a2a0a', text: 'Сбербанк отчитался за квартал: прибыль выросла на 18%. Стоит ли покупать акции сейчас? Разбор аналитиков.', time: '20 мин назад' },
+    { channel: 'ДОХОДЪ', handle: 'dohod', emoji: '💼', bg: '#1a1a0a', text: 'Куда инвестировать в 2025 году: облигации, акции или недвижимость? Сравниваем инструменты по риску и доходности.', time: '3 часа назад' },
+  ],
+  life: [
+    { channel: 'Литвин', handle: 'litvintm', emoji: '✨', bg: '#2a0a2a', text: 'Почему утренние ритуалы меняют жизнь: мой личный опыт после 6 месяцев экспериментов. Делюсь результатами.', time: '2 часа назад' },
+    { channel: 'Ида Галич', handle: 'GALICH_onok', emoji: '🌸', bg: '#2a1a2a', text: 'Неделя в Стамбуле: лучшие рестораны, районы и неочевидные места. Сохраняй перед поездкой!', time: '5 часов назад' },
+  ],
+  music: [
+    { channel: 'Exile Music', handle: 'exilemusic13', emoji: '🎸', bg: '#0a0a2a', text: 'Новый альбом уже вышел! Год работы, 12 треков и море эмоций. Слушайте на всех платформах.', time: '1 час назад' },
+    { channel: 'Джиган', handle: 'geegunchill', emoji: '🎤', bg: '#1a0a2a', text: 'Записали новый трек с неожиданным гостем. Угадайте кто это по фрагменту текста 👇', time: '6 часов назад' },
+  ],
+  games: [
+    { channel: 'DTF Games', handle: 'dtf_games', emoji: '🕹', bg: '#0a1a0a', text: 'GTA VI перенесли на осень 2026: что известно о новой части и почему это может быть лучшей игрой десятилетия.', time: '10 мин назад' },
+    { channel: 'Игромания', handle: 'igromania', emoji: '🎯', bg: '#1a0a0a', text: 'Лучшие инди-игры марта 2025: 10 проектов которые вы могли пропустить. Обзоры и оценки редакции.', time: '3 часа назад' },
+  ],
+};
+
+// ===== STATE =====
+let selectedTopics = new Set();
+let activeFilter = 'all';
+let subscribedChannels = new Set();
+
+// Init Telegram WebApp
+if (window.Telegram?.WebApp) {
+  Telegram.WebApp.ready();
+  Telegram.WebApp.expand();
+}
+
+// ===== ONBOARDING =====
+function renderTopicsGrid(containerId, isSettings = false) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  TOPICS.forEach(topic => {
+    const selected = selectedTopics.has(topic.id);
+    const card = document.createElement('div');
+    card.className = 'topic-card' + (selected ? ' selected' : '');
+    card.innerHTML = `
+      <div class="topic-emoji">${topic.emoji}</div>
+      <div class="topic-name">${topic.name}</div>
+      <div class="topic-check"></div>
+    `;
+    card.onclick = () => toggleTopic(topic.id, containerId, isSettings);
+    container.appendChild(card);
+  });
+}
+
+function toggleTopic(id, containerId, isSettings) {
+  if (selectedTopics.has(id)) {
+    selectedTopics.delete(id);
+  } else {
+    selectedTopics.add(id);
+  }
+  renderTopicsGrid(containerId, isSettings);
+  if (!isSettings) {
+    document.getElementById('btn-start').disabled = selectedTopics.size === 0;
+  }
+}
+
+function startFeed() {
+  showScreen('feed');
+  renderFilterTabs();
+  renderFeed('all');
+}
+
+// ===== FILTER TABS =====
+function renderFilterTabs() {
+  const tabs = document.getElementById('filter-tabs');
+  tabs.innerHTML = '';
+  const allTab = document.createElement('div');
+  allTab.className = 'filter-tab active';
+  allTab.textContent = '✦ Всё';
+  allTab.onclick = () => setFilter('all', allTab);
+  tabs.appendChild(allTab);
+
+  selectedTopics.forEach(id => {
+    const topic = TOPICS.find(t => t.id === id);
+    if (!topic) return;
+    const tab = document.createElement('div');
+    tab.className = 'filter-tab';
+    tab.textContent = topic.emoji + ' ' + topic.name;
+    tab.onclick = () => setFilter(id, tab);
+    tabs.appendChild(tab);
+  });
+}
+
+function setFilter(id, el) {
+  activeFilter = id;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderFeed(id);
+}
+
+// ===== FEED =====
+function renderFeed(filter) {
+  const list = document.getElementById('feed-list');
+  list.innerHTML = '<div class="loading-screen"><div class="spinner"></div><span>Загружаем ленту...</span></div>';
+
+  setTimeout(() => {
+    let posts = [];
+    const topicsToShow = filter === 'all' ? [...selectedTopics] : [filter];
+    topicsToShow.forEach(id => {
+      const topicPosts = SAMPLE_POSTS[id] || [];
+      topicPosts.forEach(p => posts.push({ ...p, topicId: id }));
+    });
+
+    // Shuffle
+    posts.sort(() => Math.random() - 0.5);
+
+    list.innerHTML = '';
+    if (posts.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="emoji">📭</div><p>Нет постов по выбранным темам</p></div>';
+      return;
+    }
+
+    posts.forEach((post, i) => {
+      const topic = TOPICS.find(t => t.id === post.topicId);
+      const isSubscribed = subscribedChannels.has(post.handle);
+      const card = document.createElement('div');
+      card.className = 'post-card';
+      card.style.animationDelay = (i * 0.05) + 's';
+      card.innerHTML = `
+        <div class="post-header">
+          <div class="channel-avatar" style="background:${post.bg}">${post.emoji}</div>
+          <div class="channel-info">
+            <div class="channel-name">${post.channel}</div>
+            <div class="post-time">${post.time}</div>
+          </div>
+          <div class="post-topic-badge">${topic?.emoji || ''} ${topic?.name || ''}</div>
+        </div>
+        <div class="post-content">${post.text}</div>
+        <div class="post-actions">
+          <button class="btn-subscribe ${isSubscribed ? 'subscribed' : ''}" 
+            onclick="toggleSubscribe('${post.handle}', this)">
+            ${isSubscribed ? '✓ Подписан' : '+ Подписаться'}
+          </button>
+          <button class="btn-read" onclick="openChannel('${post.handle}')">
+            Читать →
+          </button>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+  }, 600);
+}
+
+function toggleSubscribe(handle, btn) {
+  if (subscribedChannels.has(handle)) {
+    subscribedChannels.delete(handle);
+    btn.textContent = '+ Подписаться';
+    btn.classList.remove('subscribed');
+  } else {
+    subscribedChannels.add(handle);
+    btn.textContent = '✓ Подписан';
+    btn.classList.add('subscribed');
+  }
+}
+
+function openChannel(handle) {
+  const url = `https://t.me/${handle}`;
+  if (window.Telegram?.WebApp) {
+    Telegram.WebApp.openTelegramLink(url);
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+// ===== SETTINGS =====
+function showSettings() {
+  renderTopicsGrid('settings-topics-grid', true);
+  showScreen('settings');
+}
+
+function saveSettings() {
+  showScreen('feed');
+  renderFilterTabs();
+  renderFeed(activeFilter);
+}
+
+// ===== NAVIGATION =====
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+// ===== INIT =====
+renderTopicsGrid('topics-grid');
+</script>
+</body>
+</html>
