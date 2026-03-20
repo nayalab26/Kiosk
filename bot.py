@@ -101,6 +101,20 @@ async def applications_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"✅ /approve {app['handle']}   ❌ /reject {app['handle']}\n\n"
     await update.message.reply_text(text)
 
+async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    if not context.args:
+        await update.message.reply_text("Использование: /remove username")
+        return
+    handle = context.args[0].replace('@', '')
+    async with httpx.AsyncClient() as client:
+        await client.delete(
+            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}",
+            headers=HEADERS
+        )
+    await update.message.reply_text(f"🗑 Канал @{handle} удалён из Киоска.")
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🗞 *Киоск* — персональная лента каналов\n\n"
@@ -109,17 +123,29 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/applications — список заявок\n"
         "/approve username — одобрить канал\n"
         "/reject username — отклонить канал\n"
+        "/remove username — удалить канал\n"
         "/help — помощь",
         parse_mode="Markdown"
     )
 
+async def post_init(application):
+    await application.bot.set_my_commands([
+        ("start", "🗞 Открыть Киоск"),
+        ("applications", "📬 Список заявок"),
+        ("approve", "✅ Одобрить канал"),
+        ("reject", "❌ Отклонить канал"),
+        ("remove", "🗑 Удалить канал"),
+        ("help", "❓ Помощь"),
+    ])
+
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("approve", approve))
     app.add_handler(CommandHandler("reject", reject))
     app.add_handler(CommandHandler("applications", applications_list))
+    app.add_handler(CommandHandler("remove", remove))
     print("✅ Бот запущен!")
     app.run_polling()
 
