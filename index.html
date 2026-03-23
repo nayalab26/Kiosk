@@ -1064,65 +1064,164 @@ function setFilter(id, el) {
 }
 
 // ===== FEED =====
-function renderFeed(filter) {
+async function renderFeed(filter) {
   const list = document.getElementById('feed-list');
   list.innerHTML = '<div class="loading-screen"><div class="spinner"></div><span>Загружаем ленту...</span></div>';
 
-  setTimeout(() => {
-    let posts = [];
+  try {
+    // Get approved channels for selected topics
     const topicsToShow = filter === 'all' ? [...selectedTopics] : [filter];
-    topicsToShow.forEach(id => {
-      const topicPosts = SAMPLE_POSTS[id] || [];
-      // Показываем только последний пост каждого канала
-      const seen = new Set();
-      topicPosts.forEach(p => {
-        if (!seen.has(p.handle)) {
-          seen.add(p.handle);
-          posts.push({ ...p, topicId: id });
-        }
-      });
-    });
+
+    // Fetch approved channels
+    const chRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/applications?status=eq.approved&select=handle,title,categories`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const channels = await chRes.json();
+
+    // Filter channels by selected topics
+    const relevantHandles = channels
+      .filter(ch => {
+        const cats = (ch.categories || '').toLowerCase();
+        return topicsToShow.some(id => {
+          const topic = TOPICS.find(t => t.id === id);
+          return topic && cats.includes(topic.name.toLowerCase());
+        });
+      })
+      .map(ch => ch.handle);
+
+    if (relevantHandles.length === 0) {
+      // Fall back to sample posts if no real channels yet
+      renderSampleFeed(filter);
+      return;
+    }
+
+    // Fetch latest post per channel from Supabase
+    const handlesFilter = relevantHandles.map(h => `channel_handle.eq.${h}`).join(',');
+    const postsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/posts?or=(${handlesFilter})&order=published_at.desc&limit=50`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const allPosts = await postsRes.json();
+
+    // Show only latest post per channel
+    const seen = new Set();
+    const posts = [];
+    for (const post of allPosts) {
+      if (!seen.has(post.channel_handle)) {
+        seen.add(post.channel_handle);
+        posts.push(post);
+      }
+    }
 
     // Shuffle
     posts.sort(() => Math.random() - 0.5);
 
     list.innerHTML = '';
     if (posts.length === 0) {
-      list.innerHTML = '<div class="empty-state"><div class="emoji">📭</div><p>Нет постов по выбранным темам</p></div>';
+      renderSampleFeed(filter);
       return;
     }
 
     posts.forEach((post, i) => {
-      const topic = TOPICS.find(t => t.id === post.topicId);
-      const isSubscribed = subscribedChannels.has(post.handle);
+      const info = CHANNEL_INFO[post.channel_handle] || { emoji: '📢', bg: '#1a1a1a' };
+      const isSubscribed = subscribedChannels.has(post.channel_handle);
+      const timeAgo = getTimeAgo(post.published_at);
       const card = document.createElement('div');
       card.className = 'post-card';
       card.style.animationDelay = (i * 0.05) + 's';
-      card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.handle); };
+      card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.post_url || post.channel_handle); };
       card.style.cursor = 'pointer';
       card.innerHTML = `
         <div class="post-header">
-          <div class="channel-avatar" style="background:${post.bg}">${post.emoji}</div>
+          <div class="channel-avatar" style="background:${info.bg}">${info.emoji}</div>
           <div class="channel-info">
-            <div class="channel-name" style="cursor:pointer" onclick="openChannel('${post.handle}')">${post.channel}</div>
-            <div class="post-time">${post.time}</div>
+            <div class="channel-name" style="cursor:pointer" onclick="openChannel('${post.channel_handle}')">${post.channel_title || post.channel_handle}</div>
+            <div class="post-time">${timeAgo}</div>
           </div>
-          <div class="post-topic-badge">${topic?.emoji || ''} ${topic?.name || ''}</div>
         </div>
         <div class="post-content">${post.text}</div>
         <div class="post-actions">
-          <button class="btn-subscribe ${isSubscribed ? 'subscribed' : ''}" 
-            onclick="toggleSubscribe('${post.handle}', this)">
+          <button class="btn-subscribe ${isSubscribed ? 'subscribed' : ''}"
+            onclick="toggleSubscribe('${post.channel_handle}', this)">
             ${isSubscribed ? '✓ Подписан' : '+ Подписаться'}
           </button>
-          <button class="btn-read" onclick="openChannel('${post.handle}')">
+          <button class="btn-read" onclick="openChannel('${post.channel_handle}')">
             Открыть канал →
           </button>
         </div>
       `;
       list.appendChild(card);
     });
-  }, 600);
+
+  } catch(e) {
+    console.error('Feed error:', e);
+    renderSampleFeed(filter);
+  }
+}
+
+function getTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = (Date.now() - new Date(dateStr)) / 1000;
+  if (diff < 60) return 'только что';
+  if (diff < 3600) return Math.floor(diff/60) + ' мин назад';
+  if (diff < 86400) return Math.floor(diff/3600) + ' ч назад';
+  return Math.floor(diff/86400) + ' дн назад';
+}
+
+function renderSampleFeed(filter) {
+  const list = document.getElementById('feed-list');
+  let posts = [];
+  const topicsToShow = filter === 'all' ? [...selectedTopics] : [filter];
+  topicsToShow.forEach(id => {
+    const topicPosts = SAMPLE_POSTS[id] || [];
+    const seen = new Set();
+    topicPosts.forEach(p => {
+      if (!seen.has(p.handle)) {
+        seen.add(p.handle);
+        posts.push({ ...p, topicId: id });
+      }
+    });
+  });
+
+  posts.sort(() => Math.random() - 0.5);
+  list.innerHTML = '';
+
+  if (posts.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div class="emoji">📭</div><p>Нет постов по выбранным темам</p></div>';
+    return;
+  }
+
+  posts.forEach((post, i) => {
+    const topic = TOPICS.find(t => t.id === post.topicId);
+    const isSubscribed = subscribedChannels.has(post.handle);
+    const card = document.createElement('div');
+    card.className = 'post-card';
+    card.style.animationDelay = (i * 0.05) + 's';
+    card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.handle); };
+    card.style.cursor = 'pointer';
+    card.innerHTML = `
+      <div class="post-header">
+        <div class="channel-avatar" style="background:${post.bg}">${post.emoji}</div>
+        <div class="channel-info">
+          <div class="channel-name" style="cursor:pointer" onclick="openChannel('${post.handle}')">${post.channel}</div>
+          <div class="post-time">${post.time}</div>
+        </div>
+        <div class="post-topic-badge">${topic?.emoji || ''} ${topic?.name || ''}</div>
+      </div>
+      <div class="post-content">${post.text}</div>
+      <div class="post-actions">
+        <button class="btn-subscribe ${isSubscribed ? 'subscribed' : ''}"
+          onclick="toggleSubscribe('${post.handle}', this)">
+          ${isSubscribed ? '✓ Подписан' : '+ Подписаться'}
+        </button>
+        <button class="btn-read" onclick="openChannel('${post.handle}')">
+          Открыть канал →
+        </button>
+      </div>
+    `;
+    list.appendChild(card);
+  });
 }
 
 function toggleSubscribe(handle, btn) {
@@ -1255,10 +1354,10 @@ function toggleSubscribeChannel(handle) {
   }
 }
 
-function readInTelegram(handle) {
-  const url = `https://t.me/${handle}`;
+function readInTelegram(urlOrHandle) {
+  const url = urlOrHandle.startsWith('http') ? urlOrHandle : `https://t.me/${urlOrHandle}`;
   if (window.Telegram?.WebApp) {
-    Telegram.WebApp.openTelegramLink(url);
+    Telegram.WebApp.openLink(url);
   } else {
     window.open(url, '_blank');
   }

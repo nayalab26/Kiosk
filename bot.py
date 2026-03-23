@@ -1,8 +1,11 @@
 import os
+import json
 import httpx
+import asyncio
+import xml.etree.ElementTree as ET
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-import json
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://nayalab26.github.io/Kiosk/")
@@ -16,6 +19,109 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+# ===== RSS PARSER =====
+async def fetch_channel_posts(handle: str) -> list:
+    url = f"https://rsshub.app/telegram/channel/{handle}"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.get(url)
+            if res.status_code != 200:
+                print(f"RSS error for {handle}: {res.status_code}")
+                return []
+
+            root = ET.fromstring(res.text)
+            channel = root.find('channel')
+            if not channel:
+                return []
+
+            channel_title = channel.findtext('title', handle)
+            posts = []
+
+            for item in channel.findall('item')[:5]:
+                title = item.findtext('title', '')
+                description = item.findtext('description', '')
+                link = item.findtext('link', '')
+                pub_date = item.findtext('pubDate', '')
+
+                # Clean HTML from description
+                import re
+                text = re.sub(r'<[^>]+>', '', description or title)
+                text = text.strip()[:500]
+
+                if not text:
+                    continue
+
+                # Parse date
+                published_at = None
+                if pub_date:
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        published_at = parsedate_to_datetime(pub_date).isoformat()
+                    except Exception:
+                        pass
+
+                posts.append({
+                    "channel_handle": handle,
+                    "channel_title": channel_title,
+                    "text": text,
+                    "post_url": link,
+                    "published_at": published_at
+                })
+
+            return posts
+
+    except Exception as e:
+        print(f"Error fetching {handle}: {e}")
+        return []
+
+async def sync_posts():
+    print("Syncing posts...")
+    async with httpx.AsyncClient() as client:
+        # Get approved channels
+        res = await client.get(
+            f"{SUPABASE_URL}/rest/v1/applications?status=eq.approved&select=handle,title",
+            headers=HEADERS
+        )
+        channels = res.json()
+
+    if not channels:
+        print("No approved channels")
+        return
+
+    for channel in channels:
+        handle = channel['handle']
+        posts = await fetch_channel_posts(handle)
+
+        if not posts:
+            continue
+
+        async with httpx.AsyncClient() as client:
+            for post in posts:
+                # Check if post already exists
+                check = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/posts?channel_handle=eq.{handle}&post_url=eq.{post['post_url']}&select=id",
+                    headers=HEADERS
+                )
+                if check.json():
+                    continue
+
+                await client.post(
+                    f"{SUPABASE_URL}/rest/v1/posts",
+                    headers=HEADERS,
+                    json=post
+                )
+
+        print(f"Synced {len(posts)} posts from @{handle}")
+
+async def periodic_sync(interval: int = 600):
+    while True:
+        try:
+            await sync_posts()
+        except Exception as e:
+            print(f"Sync error: {e}")
+        await asyncio.sleep(interval)
+
+# ===== BOT HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton(text="Открыть Киоск", web_app=WebAppInfo(url=WEBAPP_URL))]]
     await update.message.reply_text(
@@ -85,11 +191,12 @@ async def process_approve(context, handle, message=None, query=None):
     elif message:
         await message.reply_text(text)
 
+    # Start syncing posts immediately
+    asyncio.create_task(fetch_and_save_posts(handle))
+
     if data:
         chat_id = data[0].get('chat_id')
         contact = data[0].get('contact', '').replace('@', '')
-
-        # Try to get chat_id from users table if not in application
         if not chat_id and contact:
             async with httpx.AsyncClient() as client2:
                 res3 = await client2.get(
@@ -99,7 +206,6 @@ async def process_approve(context, handle, message=None, query=None):
                 users = res3.json()
                 if users:
                     chat_id = users[0].get('chat_id')
-
         if chat_id:
             try:
                 await context.bot.send_message(
@@ -112,6 +218,22 @@ async def process_approve(context, handle, message=None, query=None):
         else:
             if message:
                 await message.reply_text(f"Владелец не найден. Свяжитесь вручную: {data[0].get('contact','—')}")
+
+async def fetch_and_save_posts(handle: str):
+    posts = await fetch_channel_posts(handle)
+    async with httpx.AsyncClient() as client:
+        for post in posts:
+            check = await client.get(
+                f"{SUPABASE_URL}/rest/v1/posts?channel_handle=eq.{handle}&post_url=eq.{post['post_url']}&select=id",
+                headers=HEADERS
+            )
+            if not check.json():
+                await client.post(
+                    f"{SUPABASE_URL}/rest/v1/posts",
+                    headers=HEADERS,
+                    json=post
+                )
+    print(f"Initial sync done for @{handle}")
 
 async def process_reject(context, handle, message=None, query=None):
     async with httpx.AsyncClient() as client:
@@ -134,7 +256,6 @@ async def process_reject(context, handle, message=None, query=None):
     if data:
         chat_id = data[0].get('chat_id')
         contact = data[0].get('contact', '').replace('@', '')
-
         if not chat_id and contact:
             async with httpx.AsyncClient() as client2:
                 res3 = await client2.get(
@@ -144,7 +265,6 @@ async def process_reject(context, handle, message=None, query=None):
                 users = res3.json()
                 if users:
                     chat_id = users[0].get('chat_id')
-
         if chat_id:
             try:
                 await context.bot.send_message(
@@ -160,8 +280,7 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: /approve username")
         return
-    handle = context.args[0].replace('@', '')
-    await process_approve(context, handle, message=update.message)
+    await process_approve(context, context.args[0].replace('@', ''), message=update.message)
 
 async def reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -169,8 +288,7 @@ async def reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Использование: /reject username")
         return
-    handle = context.args[0].replace('@', '')
-    await process_reject(context, handle, message=update.message)
+    await process_reject(context, context.args[0].replace('@', ''), message=update.message)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -180,11 +298,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     if data.startswith("approve:"):
-        handle = data.split(":")[1]
-        await process_approve(context, handle, query=query)
+        await process_approve(context, data.split(":")[1], query=query)
     elif data.startswith("reject:"):
-        handle = data.split(":")[1]
-        await process_reject(context, handle, query=query)
+        await process_reject(context, data.split(":")[1], query=query)
 
 async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -198,7 +314,11 @@ async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}",
             headers=HEADERS
         )
-    await update.message.reply_text(f"Канал @{handle} удален из Киоска.")
+        await client.delete(
+            f"{SUPABASE_URL}/rest/v1/posts?channel_handle=eq.{handle}",
+            headers=HEADERS
+        )
+    await update.message.reply_text(f"Канал @{handle} и его посты удалены из Киоска.")
 
 async def applications_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -226,6 +346,13 @@ async def applications_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]])
         await update.message.reply_text(text, reply_markup=keyboard)
 
+async def sync_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.message.reply_text("Запускаю синхронизацию постов...")
+    await sync_posts()
+    await update.message.reply_text("Готово!")
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Киоск — персональная лента каналов\n\n"
@@ -234,27 +361,28 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/approve username — одобрить канал\n"
         "/reject username — отклонить канал\n"
         "/remove username — удалить канал\n"
+        "/sync — синхронизировать посты\n"
         "/help — помощь"
     )
 
 async def post_init(application):
     from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
-
-    # Команды для всех пользователей
     await application.bot.set_my_commands([
         ("start", "Открыть Киоск"),
         ("help", "Помощь"),
     ], scope=BotCommandScopeAllPrivateChats())
-
-    # Команды для админа
     await application.bot.set_my_commands([
         ("start", "Открыть Киоск"),
         ("applications", "Список заявок"),
         ("approve", "Одобрить канал"),
         ("reject", "Отклонить канал"),
         ("remove", "Удалить канал"),
+        ("sync", "Синхронизировать посты"),
         ("help", "Помощь"),
     ], scope=BotCommandScopeChat(chat_id=ADMIN_ID))
+    # Start periodic sync
+    asyncio.create_task(periodic_sync(600))
+    print("Bot started! Periodic sync every 10 minutes.")
 
 def main():
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
@@ -264,10 +392,10 @@ def main():
     app.add_handler(CommandHandler("reject", reject))
     app.add_handler(CommandHandler("applications", applications_list))
     app.add_handler(CommandHandler("remove", remove))
+    app.add_handler(CommandHandler("sync", sync_now))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, save_user_chat_id))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, save_user_chat_id))
-    print("Bot started!")
     app.run_polling()
 
 if __name__ == "__main__":
