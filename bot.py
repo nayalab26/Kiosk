@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 from datetime import datetime
 from aiohttp import web
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -377,10 +377,47 @@ async def handle_getmembercount(request):
         headers={'Access-Control-Allow-Origin': '*'}
     )
 
+async def handle_notify(request):
+    try:
+        data = await request.json()
+    except Exception:
+        return web.json_response({'ok': False}, status=400)
+    handle = data.get('handle', '')
+    title = data.get('title', handle)
+    categories = data.get('categories', '')
+    contact = data.get('contact', '')
+    subscribers = data.get('subscribers', 0)
+    description = data.get('description', '')
+    user_id = data.get('user_id')
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Одобрить", callback_data=f"approve:{handle}"),
+        InlineKeyboardButton("Отклонить", callback_data=f"reject:{handle}")
+    ]])
+    try:
+        bot = Bot(token=BOT_TOKEN)
+        await bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"Новая заявка!\n\nКанал: @{handle}\nНазвание: {title}\nКатегории: {categories}\nКонтакт: {contact}\nПодписчиков: {subscribers}",
+            reply_markup=keyboard
+        )
+        if user_id:
+            await bot.send_message(chat_id=user_id, text="Заявка отправлена! Рассмотрим в течение 24 часов.")
+    except Exception as e:
+        print(f"[ERROR] handle_notify: {e}")
+        return web.json_response({'ok': False, 'error': str(e)}, status=500,
+                                 headers={'Access-Control-Allow-Origin': '*'})
+    return web.json_response({'ok': True}, headers={'Access-Control-Allow-Origin': '*'})
+
 async def run_web_server():
     app = web.Application()
     app.router.add_get('/api/getchat', handle_getchat)
     app.router.add_get('/api/getchatmembercount', handle_getmembercount)
+    app.router.add_post('/api/notify', handle_notify)
+    app.router.add_options('/api/notify', lambda r: web.Response(headers={
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+    }))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', PORT)
