@@ -15,11 +15,18 @@ WEBAPP_URL = os.environ.get("WEBAPP_URL", "https://nayalab26.github.io/Kiosk/")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", SUPABASE_KEY)
 PORT = int(os.environ.get("PORT", 8080))
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json"
+}
+
+SERVICE_HEADERS = {
+    "apikey": SUPABASE_SERVICE_KEY,
+    "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
     "Content-Type": "application/json"
 }
 
@@ -185,7 +192,7 @@ async def process_approve(context, handle, message=None, query=None):
         if len(data) > 1:
             await client.delete(
                 f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&id=neq.{latest_id}",
-                headers=HEADERS
+                headers=SERVICE_HEADERS
             )
     text = f"Канал @{handle} одобрен и добавлен в Киоск!"
     if query:
@@ -258,7 +265,7 @@ async def process_reject(context, handle, message=None, query=None):
         if len(data) > 1:
             await client.delete(
                 f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&id=neq.{latest_id}",
-                headers=HEADERS
+                headers=SERVICE_HEADERS
             )
     text = f"Заявка канала @{handle} отклонена."
     if query:
