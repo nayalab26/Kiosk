@@ -419,16 +419,18 @@ async def handle_notify(request):
         bot = Bot(token=BOT_TOKEN)
         async with httpx.AsyncClient() as client:
             check = await client.get(
-                f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&status=eq.pending&select=id",
+                f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&status=in.(pending,approved)&select=id,status",
                 headers=HEADERS
             )
             existing = check.json()
         if existing:
+            status = existing[0]['status']
+            if status == 'approved':
+                msg = f"Канал @{handle} уже добавлен в Киоск! Открыть: @Kiosk_lenta_Bot"
+            else:
+                msg = f"Заявка на канал @{handle} уже на рассмотрении. Мы сообщим вам о решении!"
             if user_id:
-                await bot.send_message(
-                    chat_id=user_id,
-                    text=f"Заявка на канал @{handle} уже на рассмотрении. Мы сообщим вам о решении!"
-                )
+                await bot.send_message(chat_id=user_id, text=msg)
             return web.json_response({'ok': True, 'duplicate': True}, headers={'Access-Control-Allow-Origin': '*'})
         async with httpx.AsyncClient() as client:
             await client.post(
