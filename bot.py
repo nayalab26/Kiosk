@@ -165,15 +165,28 @@ async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def process_approve(context, handle, message=None, query=None):
     async with httpx.AsyncClient() as client:
-        await client.patch(
-            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&status=eq.pending",
-            headers=HEADERS, json={"status": "approved"}
-        )
-        res2 = await client.get(
-            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&select=contact,title,chat_id",
+        res_all = await client.get(
+            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&order=id.desc&select=id,contact,title,chat_id",
             headers=HEADERS
         )
-        data = res2.json()
+        data = res_all.json()
+        if not data:
+            text = f"Заявка @{handle} не найдена."
+            if query:
+                await query.edit_message_text(query.message.text + "\n\n" + text)
+            elif message:
+                await message.reply_text(text)
+            return
+        latest_id = data[0]['id']
+        await client.patch(
+            f"{SUPABASE_URL}/rest/v1/applications?id=eq.{latest_id}",
+            headers=HEADERS, json={"status": "approved"}
+        )
+        if len(data) > 1:
+            await client.delete(
+                f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&id=neq.{latest_id}",
+                headers=HEADERS
+            )
     text = f"Канал @{handle} одобрен и добавлен в Киоск!"
     if query:
         await query.edit_message_text(query.message.text + "\n\n" + text)
@@ -225,15 +238,28 @@ async def fetch_and_save_posts(handle: str):
 
 async def process_reject(context, handle, message=None, query=None):
     async with httpx.AsyncClient() as client:
-        await client.patch(
-            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&status=eq.pending",
-            headers=HEADERS, json={"status": "rejected"}
-        )
-        res2 = await client.get(
-            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&select=contact,chat_id",
+        res_all = await client.get(
+            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&order=id.desc&select=id,contact,chat_id",
             headers=HEADERS
         )
-        data = res2.json()
+        data = res_all.json()
+        if not data:
+            text = f"Заявка @{handle} не найдена."
+            if query:
+                await query.edit_message_text(query.message.text + "\n\n" + text)
+            elif message:
+                await message.reply_text(text)
+            return
+        latest_id = data[0]['id']
+        await client.patch(
+            f"{SUPABASE_URL}/rest/v1/applications?id=eq.{latest_id}",
+            headers=HEADERS, json={"status": "rejected"}
+        )
+        if len(data) > 1:
+            await client.delete(
+                f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&id=neq.{latest_id}",
+                headers=HEADERS
+            )
     text = f"Заявка канала @{handle} отклонена."
     if query:
         await query.edit_message_text(query.message.text + "\n\n" + text)
@@ -389,12 +415,35 @@ async def handle_notify(request):
     subscribers = data.get('subscribers', 0)
     description = data.get('description', '')
     user_id = data.get('user_id')
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Одобрить", callback_data=f"approve:{handle}"),
-        InlineKeyboardButton("Отклонить", callback_data=f"reject:{handle}")
-    ]])
     try:
         bot = Bot(token=BOT_TOKEN)
+        async with httpx.AsyncClient() as client:
+            check = await client.get(
+                f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&status=eq.pending&select=id",
+                headers=HEADERS
+            )
+            existing = check.json()
+        if existing:
+            if user_id:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=f"Заявка на канал @{handle} уже на рассмотрении. Мы сообщим вам о решении!"
+                )
+            return web.json_response({'ok': True, 'duplicate': True}, headers={'Access-Control-Allow-Origin': '*'})
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{SUPABASE_URL}/rest/v1/applications",
+                headers=HEADERS,
+                json={
+                    "handle": handle, "title": title, "description": description,
+                    "categories": categories, "contact": contact,
+                    "subscribers": subscribers, "chat_id": user_id, "status": "pending"
+                }
+            )
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("Одобрить", callback_data=f"approve:{handle}"),
+            InlineKeyboardButton("Отклонить", callback_data=f"reject:{handle}")
+        ]])
         await bot.send_message(
             chat_id=ADMIN_ID,
             text=f"Новая заявка!\n\nКанал: @{handle}\nНазвание: {title}\nКатегории: {categories}\nКонтакт: {contact}\nПодписчиков: {subscribers}",
