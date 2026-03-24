@@ -1521,31 +1521,18 @@ async function submitRegistration() {
     });
   } catch(e) { console.error('Supabase error:', e); }
 
-  // Send to bot admin with inline buttons
-  const message = `📬 Новая заявка на размещение!\n\n` +
-    `📢 Канал: @${handle}\n` +
-    `🏷 Название: ${previewData?.title || handle}\n` +
-    `📂 Категории: ${topicNames}\n` +
-    `👤 Контакт: ${contact}\n` +
-    `👥 Подписчиков: ${previewData?.members_count?.toLocaleString() || '—'}\n` +
-    `📝 Описание: ${previewData?.description || '—'}`;
-
-  try {
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: ADMIN_ID,
-        text: message,
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '✅ Одобрить', callback_data: `approve:${handle}` },
-            { text: '❌ Отклонить', callback_data: `reject:${handle}` }
-          ]]
-        }
-      })
-    });
-  } catch(e) {}
+  // Notify bot — sends admin notification + confirmation to applicant
+  if (window.Telegram?.WebApp) {
+    Telegram.WebApp.sendData(JSON.stringify({
+      handle: handle,
+      title: previewData?.title || handle,
+      description: previewData?.description || '',
+      categories: topicNames,
+      contact: contact,
+      subscribers: previewData?.members_count || 0
+    }));
+    return;
+  }
 
   // Show success
   document.getElementById('register-form').style.display = 'none';
