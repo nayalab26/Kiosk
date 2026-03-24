@@ -982,7 +982,8 @@ const SAMPLE_POSTS = {
   ],
 };
 
-const BOT_TOKEN = '8624327731:AAG5aS4V-X9rd8gAv9u-lpyxWqDezQH8myM';
+// ВАЖНО: укажите URL вашего Railway-деплоя (Railway -> Settings -> Domains)
+const PROXY_URL = 'https://YOUR-RAILWAY-URL.railway.app';
 const ADMIN_ID = '238292';
 const SUPABASE_URL = 'https://vueetwklqcgehirsvqno.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ZDoB5YyIUMWKASBVnA8pZQ_TtjC8sFr'; // publishable key - safe for frontend
@@ -1236,15 +1237,6 @@ function toggleSubscribe(handle, btn) {
   }
 }
 
-function openChannel(handle) {
-  const url = `https://t.me/${handle}`;
-  if (window.Telegram?.WebApp) {
-    Telegram.WebApp.openTelegramLink(url);
-  } else {
-    window.open(url, '_blank');
-  }
-}
-
 // ===== SETTINGS =====
 function showSettings() {
   renderTopicsGrid('settings-topics-grid', true);
@@ -1287,26 +1279,11 @@ const CHANNEL_INFO = {
   igromania:           { name: 'Игромания', desc: 'Легендарный игровой журнал теперь в Telegram. Обзоры, новости, инсайды.', subscribers: '350К', posts: '6/день', emoji: '🎯', bg: '#1a0a0a' },
 };
 
-function openChannel(handle) {
+async function openChannel(handle) {
   const info = CHANNEL_INFO[handle] || { name: handle, desc: 'Telegram канал', subscribers: '—', posts: '—', emoji: '📢', bg: '#1a1a1a' };
   const isSubscribed = subscribedChannels.has(handle);
-  const posts = Object.values(SAMPLE_POSTS).flat().filter(p => p.handle === handle).slice(0, 3);
 
   document.getElementById('channel-screen-title').textContent = info.name;
-
-  const postsHtml = posts.length > 0
-    ? posts.map(p => `
-        <div class="channel-post-item">
-          ${p.text}
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;">
-            <div class="channel-post-time">${p.time}</div>
-            <button onclick="readInTelegram('${handle}')" style="background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:8px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer;">
-              Читать →
-            </button>
-          </div>
-        </div>`).join('')
-    : '<div class="empty-state"><div class="emoji">📭</div><p>Нет постов</p></div>';
-
   document.getElementById('channel-content').innerHTML = `
     <div class="channel-hero">
       <div class="channel-hero-avatar" style="background:${info.bg}">${info.emoji}</div>
@@ -1323,17 +1300,57 @@ function openChannel(handle) {
           <div class="channel-stat-label">постов</div>
         </div>
       </div>
-      <button class="btn-subscribe-big ${isSubscribed ? 'subscribed' : ''}" 
+      <button class="btn-subscribe-big ${isSubscribed ? 'subscribed' : ''}"
         id="channel-sub-btn"
         onclick="toggleSubscribeChannel('${handle}')">
         ${isSubscribed ? '✓ Вы подписаны' : '+ Подписаться на канал'}
       </button>
     </div>
     <div class="channel-posts-label">Последние посты</div>
-    <div class="channel-posts-list">${postsHtml}</div>
+    <div class="channel-posts-list" id="channel-posts-list">
+      <div class="loading-screen"><div class="spinner"></div><span>Загружаем посты...</span></div>
+    </div>
   `;
-
   showScreen('channel');
+
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/posts?channel_handle=eq.${handle}&order=published_at.desc&limit=5`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const posts = await res.json();
+    const postsList = document.getElementById('channel-posts-list');
+    if (posts && posts.length > 0) {
+      postsList.innerHTML = posts.map(p => `
+        <div class="channel-post-item">
+          ${p.text}
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+            <div class="channel-post-time">${getTimeAgo(p.published_at)}</div>
+            <button onclick="readInTelegram('${p.post_url || handle}')" style="background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">
+              Читать &rarr;
+            </button>
+          </div>
+        </div>`).join('');
+    } else {
+      const samplePosts = Object.values(SAMPLE_POSTS).flat().filter(p => p.handle === handle).slice(0, 3);
+      postsList.innerHTML = samplePosts.length > 0
+        ? samplePosts.map(p => `
+            <div class="channel-post-item">
+              ${p.text}
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                <div class="channel-post-time">${p.time}</div>
+                <button onclick="readInTelegram('${handle}')" style="background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">
+                  Читать &rarr;
+                </button>
+              </div>
+            </div>`).join('')
+        : '<div class="empty-state"><div class="emoji">📭</div><p>Нет постов</p></div>';
+    }
+  } catch(e) {
+    console.error('Channel posts error:', e);
+    const pl = document.getElementById('channel-posts-list');
+    if (pl) pl.innerHTML = '<div class="empty-state"><div class="emoji">📭</div><p>Не удалось загрузить посты</p></div>';
+  }
 }
 
 function toggleSubscribeChannel(handle) {
@@ -1357,7 +1374,11 @@ function toggleSubscribeChannel(handle) {
 function readInTelegram(urlOrHandle) {
   const url = urlOrHandle.startsWith('http') ? urlOrHandle : `https://t.me/${urlOrHandle}`;
   if (window.Telegram?.WebApp) {
-    Telegram.WebApp.openLink(url);
+    if (url.includes('t.me/')) {
+      Telegram.WebApp.openTelegramLink(url);
+    } else {
+      Telegram.WebApp.openLink(url);
+    }
   } else {
     window.open(url, '_blank');
   }
@@ -1415,7 +1436,7 @@ async function fetchChannelPreview(handle) {
   document.getElementById('preview-loading').classList.add('visible');
   
   try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getChat?chat_id=@${handle}`);
+    const res = await fetch(`${PROXY_URL}/api/getchat?handle=${encodeURIComponent(handle)}`);
     const data = await res.json();
     
     document.getElementById('preview-loading').classList.remove('visible');
@@ -1434,7 +1455,7 @@ async function fetchChannelPreview(handle) {
     document.getElementById('preview-desc').textContent = chat.description || 'Описание не указано';
     // Get member count separately
     try {
-      const res2 = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getChatMemberCount?chat_id=@${handle}`);
+      const res2 = await fetch(`${PROXY_URL}/api/getchatmembercount?handle=${encodeURIComponent(handle)}`);
       const data2 = await res2.json();
       if (data2.ok) {
         document.getElementById('preview-subs').textContent = `${data2.result.toLocaleString()} подписчиков`;
@@ -1479,53 +1500,7 @@ async function submitRegistration() {
   const contact = document.getElementById('reg-contact').value.trim();
   const topicNames = [...selectedCategories].map(id => { const t = TOPICS.find(t => t.id === id); return t ? t.emoji + ' ' + t.name : id; }).join(', ');
 
-  // Save to Supabase
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/applications`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`
-      },
-      body: JSON.stringify({
-        handle: handle,
-        title: previewData?.title || handle,
-        description: previewData?.description || '',
-        categories: topicNames,
-        contact: contact,
-        subscribers: previewData?.members_count || 0,
-        status: 'pending'
-      })
-    });
-  } catch(e) { console.error('Supabase error:', e); }
-
-  // Send to bot admin with inline buttons
-  const message = `📬 Новая заявка на размещение!\n\n` +
-    `📢 Канал: @${handle}\n` +
-    `🏷 Название: ${previewData?.title || handle}\n` +
-    `📂 Категории: ${topicNames}\n` +
-    `👤 Контакт: ${contact}\n` +
-    `👥 Подписчиков: ${previewData?.members_count?.toLocaleString() || '—'}\n` +
-    `📝 Описание: ${previewData?.description || '—'}`;
-
-  try {
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: ADMIN_ID,
-        text: message,
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '✅ Одобрить', callback_data: `approve:${handle}` },
-            { text: '❌ Отклонить', callback_data: `reject:${handle}` }
-          ]]
-        }
-      })
-    });
-  } catch(e) {}
-
+  // Бот получает данные через sendData и сам сохраняет в Supabase + уведомляет админа
   // Send via Telegram WebApp sendData
   if (window.Telegram?.WebApp?.sendData) {
     const payload = JSON.stringify({
@@ -1674,7 +1649,7 @@ loadTopics(() => {
 </div>
 <script>
 window.onerror = function(msg, url, line) {
-  document.body.innerHTML = '<div style="color:white;padding:20px;font-family:sans-serif"><h2>Ошибка загрузки</h2><p>' + msg + '</p><p>Строка: ' + line + '</p></div>';
+  console.error('JS Error:', msg, 'at line', line);
   return false;
 };
 </script>
