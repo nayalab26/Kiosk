@@ -21,7 +21,7 @@ HEADERS = {
 
 # ===== RSS PARSER =====
 async def fetch_channel_posts(handle: str) -> list:
-    url = f"https://rsshub.app/telegram/channel/{handle}"
+    url = f"https://tg.i-c-a.su/rss/{handle}"
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             res = await client.get(url)
