@@ -32,34 +32,27 @@ async def fetch_channel_posts(handle: str) -> list:
             if res.status_code != 200:
                 print(f"RSS error for {handle}: {res.status_code}")
                 return []
-
             root = ET.fromstring(res.text)
-            channel = root.find('channel')
+            channel = root.find("channel")
             if not channel:
                 return []
-
-            channel_title = channel.findtext('title', handle)
+            channel_title = channel.findtext("title", handle)
             posts = []
-
-            for item in channel.findall('item')[:5]:
-                title = item.findtext('title', '')
-                description = item.findtext('description', '')
-                link = item.findtext('link', '')
-                pub_date = item.findtext('pubDate', '')
-
-                text = re.sub(r'<[^>]+>', '', description or title)
+            for item in channel.findall("item")[:5]:
+                title = item.findtext("title", "")
+                description = item.findtext("description", "")
+                link = item.findtext("link", "")
+                pub_date = item.findtext("pubDate", "")
+                text = re.sub(r"<[^>]+>", "", description or title)
                 text = text.strip()[:500]
-
                 if not text:
                     continue
-
                 published_at = None
                 if pub_date:
                     try:
                         published_at = parsedate_to_datetime(pub_date).isoformat()
                     except Exception:
                         pass
-
                 posts.append({
                     "channel_handle": handle,
                     "channel_title": channel_title,
@@ -67,9 +60,7 @@ async def fetch_channel_posts(handle: str) -> list:
                     "post_url": link,
                     "published_at": published_at
                 })
-
             return posts
-
     except Exception as e:
         print(f"Error fetching {handle}: {e}")
         return []
@@ -82,18 +73,14 @@ async def sync_posts():
             headers=HEADERS
         )
         channels = res.json()
-
     if not channels:
         print("No approved channels")
         return
-
     for channel in channels:
-        handle = channel['handle']
+        handle = channel["handle"]
         posts = await fetch_channel_posts(handle)
-
         if not posts:
             continue
-
         async with httpx.AsyncClient() as client:
             for post in posts:
                 check = await client.get(
@@ -102,13 +89,11 @@ async def sync_posts():
                 )
                 if check.json():
                     continue
-
                 await client.post(
                     f"{SUPABASE_URL}/rest/v1/posts",
                     headers=HEADERS,
                     json=post
                 )
-
         print(f"Synced {len(posts)} posts from @{handle}")
 
 async def periodic_sync(interval: int = 600):
@@ -121,16 +106,15 @@ async def periodic_sync(interval: int = 600):
 
 # ===== BOT HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton(text="\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041a\u0438\u043e\u0441\u043a", web_app=WebAppInfo(url=WEBAPP_URL))]]
+    keyboard = [[InlineKeyboardButton(text="Открыть Киоск", web_app=WebAppInfo(url=WEBAPP_URL))]]
     await update.message.reply_text(
-        "\u041f\u0440\u0438\u0432\u0435\u0442! \u042f \u041a\u0438\u043e\u0441\u043a \u2014 \u0442\u0432\u043e\u044f \u043f\u0435\u0440\u0441\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u043b\u0435\u043d\u0442\u0430 Telegram-\u043a\u0430\u043d\u0430\u043b\u043e\u0432.\n\n\u041d\u0430\u0436\u043c\u0438 \u043a\u043d\u043e\u043f\u043a\u0443 \u0447\u0442\u043e\u0431\u044b \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u043b\u0435\u043d\u0442\u0443:",
+        "Привет! Я Киоск — твоя персональная лента Telegram-каналов.\n\nНажми кнопку чтобы открыть ленту:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username
     chat_id = update.effective_chat.id
-
     async with httpx.AsyncClient() as client:
         if username:
             await client.post(
@@ -138,7 +122,6 @@ async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 headers={**HEADERS, "Prefer": "resolution=merge-duplicates"},
                 json={"username": username, "chat_id": chat_id}
             )
-
         if update.message.web_app_data:
             data = json.loads(update.message.web_app_data.data)
             handle = data.get("handle", "")
@@ -147,7 +130,6 @@ async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
             categories = data.get("categories", "")
             contact = data.get("contact", "")
             subscribers = data.get("subscribers", 0)
-
             # Check for duplicate before saving
             check = await client.get(
                 f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&status=eq.pending&select=id",
@@ -163,19 +145,18 @@ async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "subscribers": subscribers, "chat_id": chat_id, "status": "pending"
                     }
                 )
-
             keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c", callback_data=f"approve:{handle}"),
-                InlineKeyboardButton("\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c", callback_data=f"reject:{handle}")
+                InlineKeyboardButton("Одобрить", callback_data=f"approve:{handle}"),
+                InlineKeyboardButton("Отклонить", callback_data=f"reject:{handle}")
             ]])
             await context.bot.send_message(
                 chat_id=ADMIN_ID,
-                text=f"\u041d\u043e\u0432\u0430\u044f \u0437\u0430\u044f\u0432\u043a\u0430!\n\n\u041a\u0430\u043d\u0430\u043b: @{handle}\n\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435: {title}\n\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438: {categories}\n\u041a\u043e\u043d\u0442\u0430\u043a\u0442: {contact}\n\u041f\u043e\u0434\u043f\u0438\u0441\u0447\u0438\u043a\u043e\u0432: {subscribers}",
+                text=f"Новая заявка!\n\nКанал: @{handle}\nНазвание: {title}\nКатегории: {categories}\nКонтакт: {contact}\nПодписчиков: {subscribers}",
                 reply_markup=keyboard
             )
-            await update.message.reply_text("\u0417\u0430\u044f\u0432\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0430! \u0420\u0430\u0441\u0441\u043c\u043e\u0442\u0440\u0438\u043c \u0432 \u0442\u0435\u0447\u0435\u043d\u0438\u0435 24 \u0447\u0430\u0441\u043e\u0432.")
+            await update.message.reply_text("Заявка отправлена! Рассмотрим в течение 24 часов.")
         else:
-            await update.message.reply_text("\u041f\u0440\u0438\u0432\u0435\u0442! \u041e\u0442\u043a\u0440\u043e\u0439 \u041a\u0438\u043e\u0441\u043a \u0447\u0442\u043e\u0431\u044b \u043f\u043e\u0434\u0430\u0442\u044c \u0437\u0430\u044f\u0432\u043a\u0443: @Kiosk_lenta_Bot")
+            await update.message.reply_text("Привет! Открой Киоск чтобы подать заявку: @Kiosk_lenta_Bot")
 
 async def process_approve(context, handle, message=None, query=None):
     async with httpx.AsyncClient() as client:
@@ -188,15 +169,12 @@ async def process_approve(context, handle, message=None, query=None):
             headers=HEADERS
         )
         data = res2.json()
-
-    text = f"\u041a\u0430\u043d\u0430\u043b @{handle} \u043e\u0434\u043e\u0431\u0440\u0435\u043d \u0438 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d \u0432 \u041a\u0438\u043e\u0441\u043a!"
+    text = f"Канал @{handle} одобрен и добавлен в Киоск!"
     if query:
         await query.edit_message_text(query.message.text + "\n\n" + text)
     elif message:
         await message.reply_text(text)
-
     asyncio.create_task(fetch_and_save_posts(handle))
-
     if data:
         chat_id = data[0].get('chat_id')
         contact = data[0].get('contact', '').replace('@', '')
@@ -213,14 +191,16 @@ async def process_approve(context, handle, message=None, query=None):
             try:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"\u0412\u0430\u0448 \u043a\u0430\u043d\u0430\u043b @{handle} \u043e\u0434\u043e\u0431\u0440\u0435\u043d \u0438 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d \u0432 \u041a\u0438\u043e\u0441\u043a! \u041e\u0442\u043a\u0440\u044b\u0442\u044c: @Kiosk_lenta_Bot"
+                    text=f"Ваш канал @{handle} одобрен и добавлен в Киоск! Открыть: @Kiosk_lenta_Bot"
                 )
             except Exception:
                 if message:
-                    await message.reply_text(f"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0443\u0432\u0435\u0434\u043e\u043c\u0438\u0442\u044c \u0432\u043b\u0430\u0434\u0435\u043b\u044c\u0446\u0430. \u041a\u043e\u043d\u0442\u0430\u043a\u0442: {data[0].get('contact','\u2014')}")
+                    contact_val = data[0].get('contact', '—')
+                    await message.reply_text(f"Не удалось уведомить владельца. Контакт: {contact_val}")
         else:
             if message:
-                await message.reply_text(f"\u0412\u043b\u0430\u0434\u0435\u043b\u0435\u0446 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d. \u0421\u0432\u044f\u0436\u0438\u0442\u0435\u0441\u044c \u0432\u0440\u0443\u0447\u043d\u0443\u044e: {data[0].get('contact','\u2014')}")
+                contact_val = data[0].get('contact', '—')
+                await message.reply_text(f"Владелец не найден. Свяжитесь вручную: {contact_val}")
 
 async def fetch_and_save_posts(handle: str):
     posts = await fetch_channel_posts(handle)
@@ -249,13 +229,11 @@ async def process_reject(context, handle, message=None, query=None):
             headers=HEADERS
         )
         data = res2.json()
-
-    text = f"\u0417\u0430\u044f\u0432\u043a\u0430 \u043a\u0430\u043d\u0430\u043b\u0430 @{handle} \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430."
+    text = f"Заявка канала @{handle} отклонена."
     if query:
         await query.edit_message_text(query.message.text + "\n\n" + text)
     elif message:
         await message.reply_text(text)
-
     if data:
         chat_id = data[0].get('chat_id')
         contact = data[0].get('contact', '').replace('@', '')
@@ -272,7 +250,7 @@ async def process_reject(context, handle, message=None, query=None):
             try:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"\u041a \u0441\u043e\u0436\u0430\u043b\u0435\u043d\u0438\u044e, \u0437\u0430\u044f\u0432\u043a\u0430 \u043a\u0430\u043d\u0430\u043b\u0430 @{handle} \u0431\u044b\u043b\u0430 \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u0430. \u0415\u0441\u043b\u0438 \u0435\u0441\u0442\u044c \u0432\u043e\u043f\u0440\u043e\u0441\u044b \u2014 \u043d\u0430\u043f\u0438\u0448\u0438\u0442\u0435 \u043d\u0430\u043c."
+                    text=f"К сожалению, заявка канала @{handle} была отклонена. Если есть вопросы — напишите нам."
                 )
             except Exception:
                 pass
@@ -281,7 +259,7 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     if not context.args:
-        await update.message.reply_text("\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u0435: /approve username")
+        await update.message.reply_text("Использование: /approve username")
         return
     await process_approve(context, context.args[0].replace('@', ''), message=update.message)
 
@@ -289,14 +267,14 @@ async def reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     if not context.args:
-        await update.message.reply_text("\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u0435: /reject username")
+        await update.message.reply_text("Использование: /reject username")
         return
     await process_reject(context, context.args[0].replace('@', ''), message=update.message)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if update.effective_user.id != ADMIN_ID:
-        await query.answer("\u041d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u0430")
+        await query.answer("Нет доступа")
         return
     await query.answer()
     data = query.data
@@ -309,7 +287,7 @@ async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     if not context.args:
-        await update.message.reply_text("\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d\u0438\u0435: /remove username")
+        await update.message.reply_text("Использование: /remove username")
         return
     handle = context.args[0].replace('@', '')
     async with httpx.AsyncClient() as client:
@@ -321,7 +299,7 @@ async def remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{SUPABASE_URL}/rest/v1/posts?channel_handle=eq.{handle}",
             headers=HEADERS
         )
-    await update.message.reply_text(f"\u041a\u0430\u043d\u0430\u043b @{handle} \u0438 \u0435\u0433\u043e \u043f\u043e\u0441\u0442\u044b \u0443\u0434\u0430\u043b\u0435\u043d\u044b \u0438\u0437 \u041a\u0438\u043e\u0441\u043a\u0430.")
+    await update.message.reply_text(f"Канал @{handle} и его посты удалены из Киоска.")
 
 async def applications_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -333,39 +311,40 @@ async def applications_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         data = res.json()
     if not data:
-        await update.message.reply_text("\u041d\u043e\u0432\u044b\u0445 \u0437\u0430\u044f\u0432\u043e\u043a \u043d\u0435\u0442.")
+        await update.message.reply_text("Новых заявок нет.")
         return
-    await update.message.reply_text(f"Pending \u0437\u0430\u044f\u0432\u043e\u043a: {len(data)}")
+    await update.message.reply_text(f"Pending заявок: {len(data)}")
     for app in data[:10]:
+        subs = app.get('subscribers') or '—'
         text = (
-            f"@{app['handle']} \u2014 {app['title']}\n"
+            f"@{app['handle']} — {app['title']}\n"
             f"{app['categories']}\n"
-            f"\u041a\u043e\u043d\u0442\u0430\u043a\u0442: {app['contact']}\n"
-            f"\u041f\u043e\u0434\u043f\u0438\u0441\u0447\u0438\u043a\u043e\u0432: {app.get('subscribers') or '\u2014'}"
+            f"Контакт: {app['contact']}\n"
+            f"Подписчиков: {subs}"
         )
         keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c", callback_data=f"approve:{app['handle']}"),
-            InlineKeyboardButton("\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c", callback_data=f"reject:{app['handle']}")
+            InlineKeyboardButton("Одобрить", callback_data=f"approve:{app['handle']}"),
+            InlineKeyboardButton("Отклонить", callback_data=f"reject:{app['handle']}")
         ]])
         await update.message.reply_text(text, reply_markup=keyboard)
 
 async def sync_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-    await update.message.reply_text("\u0417\u0430\u043f\u0443\u0441\u043a\u0430\u044e \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0430\u0446\u0438\u044e \u043f\u043e\u0441\u0442\u043e\u0432...")
+    await update.message.reply_text("Запускаю синхронизацию постов...")
     await sync_posts()
-    await update.message.reply_text("\u0413\u043e\u0442\u043e\u0432\u043e!")
+    await update.message.reply_text("Готово!")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "\u041a\u0438\u043e\u0441\u043a \u2014 \u043f\u0435\u0440\u0441\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f \u043b\u0435\u043d\u0442\u0430 \u043a\u0430\u043d\u0430\u043b\u043e\u0432\n\n"
-        "/start \u2014 \u043e\u0442\u043a\u0440\u044b\u0442\u044c \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435\n"
-        "/applications \u2014 \u0441\u043f\u0438\u0441\u043e\u043a \u0437\u0430\u044f\u0432\u043e\u043a\n"
-        "/approve username \u2014 \u043e\u0434\u043e\u0431\u0440\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b\n"
-        "/reject username \u2014 \u043e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b\n"
-        "/remove username \u2014 \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b\n"
-        "/sync \u2014 \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u044b\n"
-        "/help \u2014 \u043f\u043e\u043c\u043e\u0449\u044c"
+        "Киоск — персональная лента каналов\n\n"
+        "/start — открыть приложение\n"
+        "/applications — список заявок\n"
+        "/approve username — одобрить канал\n"
+        "/reject username — отклонить канал\n"
+        "/remove username — удалить канал\n"
+        "/sync — синхронизировать посты\n"
+        "/help — помощь"
     )
 
 # ===== PROXY WEB SERVER =====
@@ -406,17 +385,17 @@ async def run_web_server():
 async def post_init(application):
     from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
     await application.bot.set_my_commands([
-        ("start", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041a\u0438\u043e\u0441\u043a"),
-        ("help", "\u041f\u043e\u043c\u043e\u0449\u044c"),
+        ("start", "Открыть Киоск"),
+        ("help", "Помощь"),
     ], scope=BotCommandScopeAllPrivateChats())
     await application.bot.set_my_commands([
-        ("start", "\u041e\u0442\u043a\u0440\u044b\u0442\u044c \u041a\u0438\u043e\u0441\u043a"),
-        ("applications", "\u0421\u043f\u0438\u0441\u043e\u043a \u0437\u0430\u044f\u0432\u043e\u043a"),
-        ("approve", "\u041e\u0434\u043e\u0431\u0440\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b"),
-        ("reject", "\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b"),
-        ("remove", "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b"),
-        ("sync", "\u0421\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043f\u043e\u0441\u0442\u044b"),
-        ("help", "\u041f\u043e\u043c\u043e\u0449\u044c"),
+        ("start", "Открыть Киоск"),
+        ("applications", "Список заявок"),
+        ("approve", "Одобрить канал"),
+        ("reject", "Отклонить канал"),
+        ("remove", "Удалить канал"),
+        ("sync", "Синхронизировать посты"),
+        ("help", "Помощь"),
     ], scope=BotCommandScopeChat(chat_id=ADMIN_ID))
     asyncio.create_task(run_web_server())
     asyncio.create_task(periodic_sync(600))
