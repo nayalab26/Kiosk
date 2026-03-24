@@ -1496,6 +1496,10 @@ function openBot() {
 }
 
 async function submitRegistration() {
+  const btn = document.getElementById('reg-submit-btn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+
   const handle = document.getElementById('reg-username').value.replace('@', '').trim();
   const contact = document.getElementById('reg-contact').value.trim();
   const topicNames = [...selectedCategories].map(id => { const t = TOPICS.find(t => t.id === id); return t ? t.emoji + ' ' + t.name : id; }).join(', ');
@@ -1521,26 +1525,24 @@ async function submitRegistration() {
     });
   } catch(e) { console.error('Supabase error:', e); }
 
-  // Notify admin via Railway proxy (avoids token exposure)
-  try {
-    await fetch('https://kiosk-production-f959.up.railway.app/api/notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        handle: handle,
-        title: previewData?.title || handle,
-        categories: topicNames,
-        contact: contact,
-        subscribers: previewData?.members_count || 0,
-        description: previewData?.description || '',
-        user_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || null
-      })
-    });
-  } catch(e) { console.error('Notify error:', e); }
-
-  // Show success
+  // Show success immediately
   document.getElementById('register-form').style.display = 'none';
   document.getElementById('register-success').classList.add('visible');
+
+  // Notify admin in background (fire and forget)
+  fetch('https://kiosk-production-f959.up.railway.app/api/notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      handle: handle,
+      title: previewData?.title || handle,
+      categories: topicNames,
+      contact: contact,
+      subscribers: previewData?.members_count || 0,
+      description: previewData?.description || '',
+      user_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || null
+    })
+  }).catch(e => console.error('Notify error:', e));
 
   // Reset
   selectedCategories = new Set();
