@@ -149,11 +149,16 @@ async def save_user_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("Одобрить", callback_data=f"approve:{handle}"),
                 InlineKeyboardButton("Отклонить", callback_data=f"reject:{handle}")
             ]])
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"Новая заявка!\n\nКанал: @{handle}\nНазвание: {title}\nКатегории: {categories}\nКонтакт: {contact}\nПодписчиков: {subscribers}",
-                reply_markup=keyboard
-            )
+            print(f"[DEBUG] Sending admin notification to ADMIN_ID={ADMIN_ID}")
+            try:
+                await context.bot.send_message(
+                    chat_id=ADMIN_ID,
+                    text=f"Новая заявка!\n\nКанал: @{handle}\nНазвание: {title}\nКатегории: {categories}\nКонтакт: {contact}\nПодписчиков: {subscribers}",
+                    reply_markup=keyboard
+                )
+                print(f"[DEBUG] Admin notification sent OK")
+            except Exception as e:
+                print(f"[ERROR] Failed to notify admin: {e}")
             await update.message.reply_text("Заявка отправлена! Рассмотрим в течение 24 часов.")
         else:
             await update.message.reply_text("Привет! Открой Киоск чтобы подать заявку: @Kiosk_lenta_Bot")
