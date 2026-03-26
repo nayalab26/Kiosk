@@ -294,11 +294,14 @@
     flex-shrink: 0;
   }
 
-  .channel-info {}
+  .channel-info { flex: 1; min-width: 0; }
   .channel-name {
     font-size: 13px;
     font-weight: 600;
     color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .post-time {
     font-size: 11px;
@@ -306,7 +309,6 @@
   }
 
   .post-topic-badge {
-    margin-left: auto;
     background: var(--surface2);
     border-radius: 6px;
     padding: 3px 8px;
