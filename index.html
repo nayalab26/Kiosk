@@ -783,6 +783,7 @@
   }
 
   .category-option {
+    box-sizing: border-box;
     background: var(--surface);
     border: 2px solid var(--border);
     border-radius: 12px;
@@ -1062,7 +1063,7 @@
       <div class="nav-icon">➕</div>
       <div class="nav-label">Добавить</div>
     </div>
-    <div class="nav-item">
+    <div class="nav-item" onclick="showBookmarks()">
       <div class="nav-icon">🔖</div>
       <div class="nav-label">Сохранённое</div>
     </div>
@@ -1662,6 +1663,19 @@ function removeBookmark(key, card) {
   saveBookmarks();
   if (card) card.remove();
   if (!Object.keys(bookmarkData).length) renderBookmarks();
+  // Sync bookmark button in feed if visible
+  const feedList = document.getElementById('feed-list');
+  if (feedList) {
+    currentFeedPosts.forEach(function(post, i) {
+      if (post._key === key) {
+        const cards = feedList.querySelectorAll('.post-card');
+        if (cards[i]) {
+          const btn = cards[i].querySelector('.btn-bookmark');
+          if (btn) btn.classList.remove('bookmarked');
+        }
+      }
+    });
+  }
 }
 
 
