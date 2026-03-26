@@ -5,7 +5,7 @@ import httpx
 import asyncio
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from aiohttp import web
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -110,6 +110,71 @@ async def periodic_sync(interval: int = 600):
         except Exception as e:
             print(f"Sync error: {e}")
         await asyncio.sleep(interval)
+
+# ===== DIGEST =====
+async def build_digest_text() -> str:
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            f"{SUPABASE_URL}/rest/v1/posts?order=published_at.desc&limit=10"
+            f"&select=channel_handle,channel_title,text,post_url,published_at",
+            headers=HEADERS
+        )
+        posts = res.json() if res.status_code == 200 else []
+    if not posts:
+        return ""
+    lines = ["<b>Дайджест Киоска</b> — свежие посты:\n"]
+    for post in posts[:8]:
+        title = post.get("channel_title") or post.get("channel_handle", "")
+        text = (post.get("text") or "")[:150]
+        url = post.get("post_url") or f"https://t.me/{post.get('channel_handle', '')}"
+        lines.append(f"<b>{title}</b>\n{text}...\n<a href='{url}'>Читать</a>\n")
+    return "\n".join(lines)
+
+async def send_digest_to_user(bot, chat_id: int):
+    text = await build_digest_text()
+    if not text:
+        await bot.send_message(chat_id=chat_id, text="Нет новых постов для дайджеста.")
+        return
+    await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML",
+                           disable_web_page_preview=True)
+
+async def send_digest_to_all(bot):
+    text = await build_digest_text()
+    if not text:
+        return
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            f"{SUPABASE_URL}/rest/v1/users?select=chat_id&chat_id=not.is.null",
+            headers=HEADERS
+        )
+        users = res.json() if res.status_code == 200 else []
+    sent = 0
+    for u in users:
+        uid = u.get("chat_id")
+        if not uid:
+            continue
+        try:
+            await bot.send_message(chat_id=uid, text=text, parse_mode="HTML",
+                                   disable_web_page_preview=True)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            print(f"Digest error for {uid}: {e}")
+    print(f"Daily digest sent to {sent} users")
+
+async def daily_digest_scheduler(bot):
+    moscow = timezone(timedelta(hours=3))
+    last_sent = None
+    while True:
+        try:
+            now = datetime.now(moscow)
+            today = now.date()
+            if now.hour == 9 and now.minute < 10 and last_sent != today:
+                await send_digest_to_all(bot)
+                last_sent = today
+        except Exception as e:
+            print(f"Digest scheduler error: {e}")
+        await asyncio.sleep(300)
 
 # ===== BOT HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -373,15 +438,15 @@ async def sync_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await sync_posts()
     await update.message.reply_text("Готово!")
 
+async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Готовлю дайджест...")
+    await send_digest_to_user(context.bot, update.effective_chat.id)
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Киоск — персональная лента каналов\n\n"
         "/start — открыть приложение\n"
-        "/applications — список заявок\n"
-        "/approve username — одобрить канал\n"
-        "/reject username — отклонить канал\n"
-        "/remove username — удалить канал\n"
-        "/sync — синхронизировать посты\n"
+        "/digest — получить дайджест новых постов\n"
         "/help — помощь"
     )
 
@@ -486,10 +551,12 @@ async def post_init(application):
     from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
     await application.bot.set_my_commands([
         ("start", "Открыть Киоск"),
+        ("digest", "Дайджест новых постов"),
         ("help", "Помощь"),
     ], scope=BotCommandScopeAllPrivateChats())
     await application.bot.set_my_commands([
         ("start", "Открыть Киоск"),
+        ("digest", "Дайджест новых постов"),
         ("applications", "Список заявок"),
         ("approve", "Одобрить канал"),
         ("reject", "Отклонить канал"),
@@ -499,12 +566,14 @@ async def post_init(application):
     ], scope=BotCommandScopeChat(chat_id=ADMIN_ID))
     asyncio.create_task(run_web_server())
     asyncio.create_task(periodic_sync(600))
+    asyncio.create_task(daily_digest_scheduler(application.bot))
     print("Bot started! Periodic sync every 10 minutes.")
 
 def main():
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("digest", digest_command))
     app.add_handler(CommandHandler("approve", approve))
     app.add_handler(CommandHandler("reject", reject))
     app.add_handler(CommandHandler("applications", applications_list))
