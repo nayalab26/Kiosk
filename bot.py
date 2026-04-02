@@ -16,7 +16,10 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", SUPABASE_KEY)
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
 PORT = int(os.environ.get("PORT", 8080))
+
+bot_instance = None
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -553,6 +556,126 @@ async def handle_notify(request):
                                  headers={'Access-Control-Allow-Origin': '*'})
     return web.json_response({'ok': True}, headers={'Access-Control-Allow-Origin': '*'})
 
+ADMIN_CORS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+}
+
+def is_admin(request):
+    return ADMIN_SECRET and request.headers.get('Authorization') == f'Bearer {ADMIN_SECRET}'
+
+async def handle_admin_options(request):
+    return web.Response(headers=ADMIN_CORS)
+
+async def handle_admin_stats(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    async with httpx.AsyncClient() as client:
+        r_approved = await client.get(f"{SUPABASE_URL}/rest/v1/applications?status=eq.approved&select=id", headers=HEADERS)
+        r_pending  = await client.get(f"{SUPABASE_URL}/rest/v1/applications?status=eq.pending&select=id", headers=HEADERS)
+        r_posts    = await client.get(f"{SUPABASE_URL}/rest/v1/posts?select=id", headers=HEADERS)
+        r_users    = await client.get(f"{SUPABASE_URL}/rest/v1/users?select=id", headers=HEADERS)
+        r_clicks   = await client.get(f"{SUPABASE_URL}/rest/v1/channel_clicks?select=id", headers=HEADERS)
+    return web.json_response({
+        'approved': len(r_approved.json()),
+        'pending':  len(r_pending.json()),
+        'posts':    len(r_posts.json()),
+        'users':    len(r_users.json()),
+        'clicks':   len(r_clicks.json()),
+    }, headers=ADMIN_CORS)
+
+async def handle_admin_channels(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    async with httpx.AsyncClient() as client:
+        r_apps   = await client.get(f"{SUPABASE_URL}/rest/v1/applications?order=id.desc&select=id,handle,title,status,categories,contact,subscribers", headers=HEADERS)
+        r_clicks = await client.get(f"{SUPABASE_URL}/rest/v1/channel_clicks?select=channel_handle", headers=HEADERS)
+    apps = r_apps.json()
+    clicks_raw = r_clicks.json()
+    click_counts = {}
+    for row in clicks_raw:
+        h = row['channel_handle']
+        click_counts[h] = click_counts.get(h, 0) + 1
+    for app in apps:
+        app['clicks'] = click_counts.get(app['handle'], 0)
+    return web.json_response(apps, headers=ADMIN_CORS)
+
+async def handle_admin_approve(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    data = await request.json()
+    handle = data.get('handle', '').replace('@', '')
+    async with httpx.AsyncClient() as client:
+        res = await client.get(f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&order=id.desc&select=id,chat_id,contact", headers=HEADERS)
+        rows = res.json()
+        if not rows:
+            return web.json_response({'ok': False, 'error': 'Not found'}, headers=ADMIN_CORS)
+        latest_id = rows[0]['id']
+        await client.patch(f"{SUPABASE_URL}/rest/v1/applications?id=eq.{latest_id}", headers=HEADERS, json={"status": "approved"})
+        if len(rows) > 1:
+            await client.delete(f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&id=neq.{latest_id}", headers=SERVICE_HEADERS)
+    asyncio.create_task(fetch_and_save_posts(handle))
+    chat_id = rows[0].get('chat_id')
+    if not chat_id:
+        contact = rows[0].get('contact', '').replace('@', '')
+        if contact:
+            async with httpx.AsyncClient() as c:
+                r = await c.get(f"{SUPABASE_URL}/rest/v1/users?username=eq.{contact}&select=chat_id", headers=HEADERS)
+                u = r.json()
+                if u: chat_id = u[0].get('chat_id')
+    if chat_id and bot_instance:
+        try:
+            await bot_instance.send_message(chat_id=chat_id, text=f"Ваш канал @{handle} одобрен и добавлен в Киоск! Открыть: @Kiosk_lenta_Bot")
+        except Exception:
+            pass
+    return web.json_response({'ok': True}, headers=ADMIN_CORS)
+
+async def handle_admin_reject(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    data = await request.json()
+    handle = data.get('handle', '').replace('@', '')
+    async with httpx.AsyncClient() as client:
+        res = await client.get(f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&order=id.desc&select=id,chat_id,contact", headers=HEADERS)
+        rows = res.json()
+        if not rows:
+            return web.json_response({'ok': False, 'error': 'Not found'}, headers=ADMIN_CORS)
+        latest_id = rows[0]['id']
+        await client.patch(f"{SUPABASE_URL}/rest/v1/applications?id=eq.{latest_id}", headers=HEADERS, json={"status": "rejected"})
+        if len(rows) > 1:
+            await client.delete(f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&id=neq.{latest_id}", headers=SERVICE_HEADERS)
+    chat_id = rows[0].get('chat_id')
+    if not chat_id:
+        contact = rows[0].get('contact', '').replace('@', '')
+        if contact:
+            async with httpx.AsyncClient() as c:
+                r = await c.get(f"{SUPABASE_URL}/rest/v1/users?username=eq.{contact}&select=chat_id", headers=HEADERS)
+                u = r.json()
+                if u: chat_id = u[0].get('chat_id')
+    if chat_id and bot_instance:
+        try:
+            await bot_instance.send_message(chat_id=chat_id, text=f"Заявка канала @{handle} отклонена. Если есть вопросы — напишите нам.")
+        except Exception:
+            pass
+    return web.json_response({'ok': True}, headers=ADMIN_CORS)
+
+async def handle_admin_remove(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    data = await request.json()
+    handle = data.get('handle', '').replace('@', '')
+    async with httpx.AsyncClient() as client:
+        await client.delete(f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}", headers=SERVICE_HEADERS)
+        await client.delete(f"{SUPABASE_URL}/rest/v1/posts?channel_handle=eq.{handle}", headers=SERVICE_HEADERS)
+    return web.json_response({'ok': True}, headers=ADMIN_CORS)
+
+async def handle_admin_sync(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    asyncio.create_task(sync_posts())
+    return web.json_response({'ok': True}, headers=ADMIN_CORS)
+
 async def run_web_server():
     app = web.Application()
     app.router.add_get('/api/getchat', handle_getchat)
@@ -563,6 +686,13 @@ async def run_web_server():
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type'
     }))
+    app.router.add_get('/api/admin/stats',       handle_admin_stats)
+    app.router.add_get('/api/admin/channels',    handle_admin_channels)
+    app.router.add_post('/api/admin/approve',    handle_admin_approve)
+    app.router.add_post('/api/admin/reject',     handle_admin_reject)
+    app.router.add_post('/api/admin/remove',     handle_admin_remove)
+    app.router.add_post('/api/admin/sync',       handle_admin_sync)
+    app.router.add_options('/api/admin/{tail:.*}', handle_admin_options)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', PORT)
@@ -570,6 +700,8 @@ async def run_web_server():
     print(f"Proxy server started on port {PORT}")
 
 async def post_init(application):
+    global bot_instance
+    bot_instance = application.bot
     from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeChat
     await application.bot.set_my_commands([
         ("start", "Открыть Киоск"),
