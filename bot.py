@@ -115,26 +115,76 @@ async def periodic_sync(interval: int = 600):
         await asyncio.sleep(interval)
 
 # ===== DIGEST =====
-async def build_digest_text() -> str:
+async def get_all_digest_recipients() -> list:
+    async with httpx.AsyncClient() as client:
+        r_users = await client.get(
+            f"{SUPABASE_URL}/rest/v1/users?select=chat_id&chat_id=not.is.null",
+            headers=HEADERS
+        )
+        r_apps = await client.get(
+            f"{SUPABASE_URL}/rest/v1/applications?select=chat_id&chat_id=not.is.null",
+            headers=HEADERS
+        )
+    ids = set()
+    for row in (r_users.json() if r_users.status_code == 200 else []):
+        if row.get("chat_id"): ids.add(int(row["chat_id"]))
+    for row in (r_apps.json() if r_apps.status_code == 200 else []):
+        if row.get("chat_id"): ids.add(int(row["chat_id"]))
+    return list(ids)
+
+async def get_fresh_posts() -> list:
+    since = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
     async with httpx.AsyncClient() as client:
         res = await client.get(
-            f"{SUPABASE_URL}/rest/v1/posts?order=published_at.desc&limit=10"
+            f"{SUPABASE_URL}/rest/v1/posts"
+            f"?published_at=gte.{since}&order=published_at.desc&limit=50"
             f"&select=channel_handle,channel_title,text,post_url,published_at",
             headers=HEADERS
         )
-        posts = res.json() if res.status_code == 200 else []
+    return res.json() if res.status_code == 200 else []
+
+async def get_user_top_channels(user_id: int) -> list:
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            f"{SUPABASE_URL}/rest/v1/post_clicks?user_id=eq.{user_id}&select=channel_handle",
+            headers=HEADERS
+        )
+    rows = res.json() if res.status_code == 200 else []
+    counts = {}
+    for r in rows:
+        h = r.get("channel_handle")
+        if h: counts[h] = counts.get(h, 0) + 1
+    return [h for h, _ in sorted(counts.items(), key=lambda x: x[1], reverse=True)]
+
+def build_digest_text_from_posts(posts: list, label: str) -> str:
     if not posts:
         return ""
-    lines = ["<b>Дайджест Киоска</b> — свежие посты:\n"]
-    for post in posts[:8]:
+    lines = [f"<b>Дайджест Киоска</b> — {label}:\n"]
+    for post in posts[:7]:
         title = post.get("channel_title") or post.get("channel_handle", "")
-        text = (post.get("text") or "")[:150]
+        text = (post.get("text") or "")[:150].strip()
         url = post.get("post_url") or f"https://t.me/{post.get('channel_handle', '')}"
-        lines.append(f"<b>{title}</b>\n{text}...\n<a href='{url}'>Читать</a>\n")
+        lines.append(f"<b>{title}</b>\n{text}...\n<a href='{url}'>Читать →</a>\n")
     return "\n".join(lines)
 
+async def build_personalized_digest(user_id: int, all_posts: list) -> str:
+    top_channels = await get_user_top_channels(user_id)
+    if top_channels:
+        personal = [p for p in all_posts if p.get("channel_handle") in top_channels]
+        other = [p for p in all_posts if p.get("channel_handle") not in top_channels]
+        posts = (personal + other)[:7]
+        label = "подобрано для вас"
+    else:
+        posts = all_posts[:7]
+        label = "свежие посты"
+    return build_digest_text_from_posts(posts, label)
+
 async def send_digest_to_user(bot, chat_id: int):
-    text = await build_digest_text()
+    all_posts = await get_fresh_posts()
+    if not all_posts:
+        await bot.send_message(chat_id=chat_id, text="Сегодня новых постов пока нет. Заходи позже!")
+        return
+    text = await build_personalized_digest(chat_id, all_posts)
     if not text:
         await bot.send_message(chat_id=chat_id, text="Нет новых постов для дайджеста.")
         return
@@ -142,28 +192,24 @@ async def send_digest_to_user(bot, chat_id: int):
                            disable_web_page_preview=True)
 
 async def send_digest_to_all(bot):
-    text = await build_digest_text()
-    if not text:
+    all_posts = await get_fresh_posts()
+    if not all_posts:
+        print("Digest: no fresh posts, skipping")
         return
-    async with httpx.AsyncClient() as client:
-        res = await client.get(
-            f"{SUPABASE_URL}/rest/v1/users?select=chat_id&chat_id=not.is.null",
-            headers=HEADERS
-        )
-        users = res.json() if res.status_code == 200 else []
+    recipients = await get_all_digest_recipients()
     sent = 0
-    for u in users:
-        uid = u.get("chat_id")
-        if not uid:
-            continue
+    for uid in recipients:
         try:
+            text = await build_personalized_digest(uid, all_posts)
+            if not text:
+                continue
             await bot.send_message(chat_id=uid, text=text, parse_mode="HTML",
                                    disable_web_page_preview=True)
             sent += 1
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.1)
         except Exception as e:
             print(f"Digest error for {uid}: {e}")
-    print(f"Daily digest sent to {sent} users")
+    print(f"Daily digest sent to {sent}/{len(recipients)} users")
 
 async def daily_digest_scheduler(bot):
     moscow = timezone(timedelta(hours=3))
