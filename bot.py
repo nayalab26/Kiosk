@@ -800,6 +800,40 @@ async def handle_admin_channel_detail(request):
         'total_subscribers': len(sclicks),
     }, headers=ADMIN_CORS)
 
+async def handle_admin_send_report(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    data = await request.json()
+    handle = data.get('handle', '').replace('@', '')
+    text = data.get('text', '').strip()
+    if not handle or not text:
+        return web.json_response({'error': 'handle and text required'}, status=400, headers=ADMIN_CORS)
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            f"{SUPABASE_URL}/rest/v1/applications?handle=eq.{handle}&select=chat_id,contact&order=id.desc&limit=1",
+            headers=HEADERS
+        )
+        rows = res.json()
+    if not rows:
+        return web.json_response({'error': 'channel not found'}, headers=ADMIN_CORS)
+    chat_id = rows[0].get('chat_id')
+    if not chat_id:
+        contact = rows[0].get('contact', '').replace('@', '')
+        if contact:
+            async with httpx.AsyncClient() as c:
+                r = await c.get(f"{SUPABASE_URL}/rest/v1/users?username=eq.{contact}&select=chat_id", headers=HEADERS)
+                u = r.json()
+                if u: chat_id = u[0].get('chat_id')
+    if not chat_id:
+        return web.json_response({'error': 'owner chat_id not found'}, headers=ADMIN_CORS)
+    if not bot_instance:
+        return web.json_response({'error': 'bot not ready'}, headers=ADMIN_CORS)
+    try:
+        await bot_instance.send_message(chat_id=chat_id, text=text)
+    except Exception as e:
+        return web.json_response({'error': str(e)}, headers=ADMIN_CORS)
+    return web.json_response({'ok': True}, headers=ADMIN_CORS)
+
 async def handle_admin_sync(request):
     if not is_admin(request):
         return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
@@ -823,7 +857,8 @@ async def run_web_server():
     app.router.add_post('/api/admin/remove',     handle_admin_remove)
     app.router.add_post('/api/admin/sync',       handle_admin_sync)
     app.router.add_get('/api/admin/analytics',      handle_admin_analytics)
-    app.router.add_get('/api/admin/channel-detail', handle_admin_channel_detail)
+    app.router.add_get('/api/admin/channel-detail',  handle_admin_channel_detail)
+    app.router.add_post('/api/admin/send-report',    handle_admin_send_report)
     app.router.add_options('/api/admin/{tail:.*}', handle_admin_options)
     runner = web.AppRunner(app)
     await runner.setup()

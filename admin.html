@@ -168,6 +168,31 @@
   .user-sub.yes { background: rgba(80,200,120,0.15); color: var(--green); }
   .user-sub.no  { background: var(--surface); color: var(--text-muted); }
   .user-last { color: var(--text-muted); font-size: 12px; }
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; align-items: center; justify-content: center;
+    z-index: 200; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px; width: 100%; max-width: 480px;
+  }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .report-preview {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; font-size: 14px; line-height: 1.7;
+    white-space: pre-wrap; color: var(--text); margin-bottom: 20px;
+    font-family: monospace;
+  }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-cancel { background: none; border: 1px solid var(--border); color: var(--text-muted); border-radius: 8px; padding: 9px 18px; font-size: 14px; cursor: pointer; }
+  .btn-send { background: var(--accent); border: none; color: #000; border-radius: 8px; padding: 9px 20px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .btn-send:disabled { opacity: 0.5; cursor: default; }
+  .btn-report { background: rgba(245,200,66,0.1); border: 1px solid rgba(245,200,66,0.2); color: var(--accent); border-radius: 8px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-report:hover { background: rgba(245,200,66,0.2); }
+
   .empty-state { padding: 48px; text-align: center; color: var(--text-muted); font-size: 14px; }
   .spinner-inline { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -267,9 +292,9 @@
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Канал</th><th>Читателей</th><th>Подписок</th><th>Конверсия</th><th>Рейтинг</th>
+            <th>Канал</th><th>Читателей</th><th>Подписок</th><th>Конверсия</th><th>Рейтинг</th><th></th>
           </tr></thead>
-          <tbody id="a-ch-tbody"><tr><td colspan="5"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
+          <tbody id="a-ch-tbody"><tr><td colspan="6"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -292,6 +317,18 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Report Modal -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal">
+    <div class="modal-title">📊 Превью отчёта</div>
+    <div class="report-preview" id="report-text"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Отмена</button>
+      <button class="btn-send" id="btn-send-report" onclick="confirmSendReport()">Отправить владельцу</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const API = 'https://kiosk-production-f959.up.railway.app';
@@ -505,14 +542,61 @@ async function loadAnalytics() {
           <td><span class="click-count">${c.subscribers}</span></td>
           <td><span class="${convClass}">${c.conversion}%</span></td>
           <td style="font-size:12px;color:var(--text-muted)">${rank}</td>
+          <td><button class="btn-report" onclick="event.stopPropagation();showReport('${c.handle}','${(c.title||c.handle).replace(/'/g,"\\'")}',${c.readers},${c.subscribers},${c.conversion},'${rank}')">Сформировать отчёт</button></td>
         </tr>
         <tr class="ch-detail-row" id="detail-${c.handle}">
-          <td colspan="5"><div class="ch-detail-box" id="detail-box-${c.handle}">
+          <td colspan="6"><div class="ch-detail-box" id="detail-box-${c.handle}">
             <div class="ch-detail-title">Загрузка...</div>
           </div></td>
         </tr>`;
       }).join('')
     : '<tr><td colspan="5"><div class="empty-state">Нет данных</div></td></tr>';
+}
+
+let currentReportHandle = null;
+
+function showReport(handle, title, readers, subscribers, conversion, rank) {
+  currentReportHandle = handle;
+  const period = 30;
+  const rankLine = rank !== '—' ? `\n🏆 ${rank}` : '';
+  const report =
+`📊 Статистика канала @${handle}
+${title ? '«' + title + '»' : ''}
+За последние ${period} дней в Киоске:
+
+👁 ${readers} уникальных читателей
+🔗 ${subscribers} переходов на канал
+📈 Конверсия в подписку: ${conversion}%${rankLine}
+
+Киоск — агрегатор лучших Telegram-каналов
+@Kiosk_lenta_Bot`;
+
+  document.getElementById('report-text').textContent = report;
+  document.getElementById('btn-send-report').disabled = false;
+  document.getElementById('btn-send-report').textContent = 'Отправить владельцу';
+  document.getElementById('report-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('report-modal').classList.remove('open');
+  currentReportHandle = null;
+}
+
+async function confirmSendReport() {
+  if (!currentReportHandle) return;
+  const btn = document.getElementById('btn-send-report');
+  btn.disabled = true;
+  btn.textContent = 'Отправляю...';
+  const text = document.getElementById('report-text').textContent;
+  const res = await apiPost('/api/admin/send-report', { handle: currentReportHandle, text });
+  if (res?.ok) {
+    showToast('Отчёт отправлен владельцу');
+    closeModal();
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Отправить владельцу';
+    showToast('Ошибка: ' + (res?.error || 'владелец не найден'));
+  }
 }
 
 const loadedDetails = {};
