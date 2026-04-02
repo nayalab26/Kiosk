@@ -388,6 +388,7 @@
     background: rgba(245,200,66,0.1);
     color: var(--text-muted);
     border-color: var(--border);
+    cursor: not-allowed;
   }
 
   .btn-read {
@@ -610,6 +611,7 @@
     background: var(--surface2);
     color: var(--text-muted);
     border: 1px solid var(--border);
+    cursor: not-allowed;
   }
 
   .channel-posts-label {
@@ -1556,16 +1558,48 @@ function renderSampleFeed(filter) {
   });
 }
 
-function toggleSubscribe(handle, btn) {
-  if (subscribedChannels.has(handle)) {
-    subscribedChannels.delete(handle);
-    btn.textContent = '+ Подписаться';
-    btn.classList.remove('subscribed');
+function trackChannelClick(handle) {
+  fetch(`${SUPABASE_URL}/rest/v1/channel_clicks`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channel_handle: handle })
+  }).catch(() => {});
+}
+
+function saveSubscriptions() {
+  const tg = window.Telegram?.WebApp;
+  const data = JSON.stringify([...subscribedChannels]);
+  if (tg && tg.CloudStorage) {
+    tg.CloudStorage.setItem('kiosk_subscriptions', data);
   } else {
-    subscribedChannels.add(handle);
-    btn.textContent = '✓ Подписан';
-    btn.classList.add('subscribed');
+    localStorage.setItem('kiosk_subscriptions', data);
   }
+}
+
+function loadSubscriptions(callback) {
+  const tg = window.Telegram?.WebApp;
+  if (tg && tg.CloudStorage) {
+    tg.CloudStorage.getItem('kiosk_subscriptions', (err, value) => {
+      if (value) { try { JSON.parse(value).forEach(h => subscribedChannels.add(h)); } catch(e) {} }
+      if (callback) callback();
+    });
+  } else {
+    const stored = localStorage.getItem('kiosk_subscriptions');
+    if (stored) { try { JSON.parse(stored).forEach(h => subscribedChannels.add(h)); } catch(e) {} }
+    if (callback) callback();
+  }
+}
+
+function toggleSubscribe(handle, btn) {
+  if (subscribedChannels.has(handle)) return;
+  subscribedChannels.add(handle);
+  btn.textContent = '✓ Подписан';
+  btn.classList.add('subscribed');
+  trackChannelClick(handle);
+  saveSubscriptions();
+  // Open channel in Telegram
+  const url = `https://t.me/${handle}`;
+  if (window.Telegram?.WebApp) Telegram.WebApp.openTelegramLink(url);
 }
 
 // ===== SETTINGS =====
@@ -1953,20 +1987,14 @@ async function openChannel(handle) {
 
 function toggleSubscribeChannel(handle) {
   const btn = document.getElementById('channel-sub-btn');
-  if (subscribedChannels.has(handle)) {
-    subscribedChannels.delete(handle);
-    btn.textContent = '+ Подписаться на канал';
-    btn.classList.remove('subscribed');
-  } else {
-    subscribedChannels.add(handle);
-    btn.textContent = '✓ Вы подписаны';
-    btn.classList.add('subscribed');
-    // Open in Telegram too
-    const url = `https://t.me/${handle}`;
-    if (window.Telegram?.WebApp) {
-      Telegram.WebApp.openTelegramLink(url);
-    }
-  }
+  if (subscribedChannels.has(handle)) return;
+  subscribedChannels.add(handle);
+  btn.textContent = '✓ Вы подписаны';
+  btn.classList.add('subscribed');
+  trackChannelClick(handle);
+  saveSubscriptions();
+  const url = `https://t.me/${handle}`;
+  if (window.Telegram?.WebApp) Telegram.WebApp.openTelegramLink(url);
 }
 
 function readInTelegram(urlOrHandle) {
@@ -2161,6 +2189,7 @@ function loadTopics(callback) {
 document.getElementById("screen-onboarding").classList.remove("active");
 
 loadBookmarks();
+loadSubscriptions();
 loadTopics(() => {
   showScreen("feed");
   renderFilterTabs();
