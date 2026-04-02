@@ -994,6 +994,31 @@
     color: var(--text-muted);
   }
 
+  .profile-stats {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .profile-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .profile-stat-value {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .profile-stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
   .profile-footer {
     padding: 0 16px 16px;
   }
@@ -1502,6 +1527,10 @@ function renderProfileUser() {
   const bBadge = document.getElementById('bookmarks-count-badge');
   if (bCount > 0) { bBadge.textContent = bCount; bBadge.style.display = ''; }
   else bBadge.style.display = 'none';
+  // Stats row
+  const topicsCount = (window.selectedTopics || []).length;
+  document.getElementById('stat-bookmarks').textContent = bCount;
+  document.getElementById('stat-topics').textContent = topicsCount;
   renderProfileLevel();
 }
 
@@ -1512,14 +1541,25 @@ function renderProfileLevel() {
   if (!firstVisit) { firstVisit = now; localStorage.setItem(key, now); }
   const days = Math.floor((now - firstVisit) / 86400000);
 
+  // Update days stat
+  document.getElementById('stat-days').textContent = days || 1;
+
+  // Activity score: days + bookmarks*3 + topics*5
+  const bCount = Object.keys(bookmarkData).length;
+  const topicsCount = (window.selectedTopics || []).length;
+  const score = days + bCount * 3 + topicsCount * 5;
+
+  // Levels: Новичок 0-19, Знаток 20-59, Эксперт 60+
   const levels = [
-    { name: 'Новичок', min: 0,  max: 7,  next: 'Знаток' },
-    { name: 'Знаток',  min: 7,  max: 30, next: 'Эксперт' },
-    { name: 'Эксперт', min: 30, max: 30, next: null },
+    { name: 'Новичок', min: 0,  max: 20, next: 'Знаток',  nextForm: 'Знатока' },
+    { name: 'Знаток',  min: 20, max: 60, next: 'Эксперт', nextForm: 'Эксперта' },
+    { name: 'Эксперт', min: 60, max: 60, next: null,      nextForm: null },
   ];
-  const lvl = days >= 30 ? levels[2] : days >= 7 ? levels[1] : levels[0];
-  const pct = lvl.next ? Math.min(100, Math.round((days - lvl.min) / (lvl.max - lvl.min) * 100)) : 100;
-  const hint = lvl.next ? `${days - lvl.min} / ${lvl.max - lvl.min} дней до ${lvl.next === 'Знаток' ? 'Знатока' : 'Эксперта'}` : 'Максимальный уровень';
+  const lvl = score >= 60 ? levels[2] : score >= 20 ? levels[1] : levels[0];
+  const pct = lvl.next ? Math.min(100, Math.round((score - lvl.min) / (lvl.max - lvl.min) * 100)) : 100;
+  const hint = lvl.next
+    ? `${score - lvl.min} / ${lvl.max - lvl.min} очков до ${lvl.nextForm}`
+    : 'Максимальный уровень';
 
   document.getElementById('profile-level-badge').textContent = lvl.name;
   document.getElementById('profile-level-hint').textContent = hint;
@@ -1569,7 +1609,7 @@ function toggleApplications() {
 function showAbout() {
   window.Telegram?.WebApp?.showPopup({
     title: 'О приложении',
-    message: 'Киоск — агрегатор Telegram-каналов.\nВерсия 1.0 · Март 2026',
+    message: 'Киоск — агрегатор Telegram-каналов.\nВерсия 1.1 · Апрель 2026',
     buttons: [{ type: 'close' }]
   });
 }
@@ -2114,6 +2154,21 @@ loadTopics(() => {
     </div>
     <div class="profile-progress-wrap">
       <div class="profile-progress-fill" id="profile-progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="profile-stats">
+    <div class="profile-stat">
+      <div class="profile-stat-value" id="stat-bookmarks">0</div>
+      <div class="profile-stat-label">Закладок</div>
+    </div>
+    <div class="profile-stat">
+      <div class="profile-stat-value" id="stat-topics">0</div>
+      <div class="profile-stat-label">Тем</div>
+    </div>
+    <div class="profile-stat">
+      <div class="profile-stat-value" id="stat-days">0</div>
+      <div class="profile-stat-label">Дней с нами</div>
     </div>
   </div>
 
