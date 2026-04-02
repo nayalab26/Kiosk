@@ -224,6 +224,37 @@
     display: flex; align-items: center; justify-content: center;
   }
 
+  .search-bar {
+    display: none;
+    padding: 10px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 57px;
+    z-index: 9;
+  }
+  .search-bar.open { display: flex; gap: 10px; align-items: center; }
+  .search-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 14px;
+    color: var(--text);
+    outline: none;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-cancel {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 0;
+    white-space: nowrap;
+  }
+
   .filter-tabs {
     display: flex;
     gap: 8px;
@@ -1069,7 +1100,14 @@
 <div id="screen-feed" class="screen">
   <div class="feed-header">
     <div class="feed-logo">🗞 Киоск <span>ЛЕНТА</span></div>
-    <button class="btn-settings" onclick="showSettings()">⚙️</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn-settings" onclick="toggleSearch()">🔍</button>
+      <button class="btn-settings" onclick="showSettings()">⚙️</button>
+    </div>
+  </div>
+  <div class="search-bar" id="search-bar">
+    <input class="search-input" id="search-input" type="text" placeholder="Поиск по каналам и постам..." oninput="onSearchInput(this.value)">
+    <button class="search-cancel" onclick="closeSearch()">Отмена</button>
   </div>
   <div class="filter-tabs" id="filter-tabs"></div>
   <div class="feed-list" id="feed-list"></div>
@@ -1276,6 +1314,70 @@ function setFilter(id, el) {
   document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   renderFeed(id);
+}
+
+// ===== SEARCH =====
+function toggleSearch() {
+  const bar = document.getElementById('search-bar');
+  const isOpen = bar.classList.toggle('open');
+  if (isOpen) {
+    document.getElementById('search-input').focus();
+  } else {
+    closeSearch();
+  }
+}
+
+function closeSearch() {
+  const bar = document.getElementById('search-bar');
+  const input = document.getElementById('search-input');
+  bar.classList.remove('open');
+  input.value = '';
+  renderSearchResults('');
+}
+
+function onSearchInput(query) {
+  renderSearchResults(query.trim().toLowerCase());
+}
+
+function renderSearchResults(query) {
+  const list = document.getElementById('feed-list');
+  if (!query) {
+    renderFeed(activeFilter);
+    return;
+  }
+  const filtered = currentFeedPosts.filter(p =>
+    (p.channel_title || '').toLowerCase().includes(query) ||
+    (p.channel_handle || '').toLowerCase().includes(query) ||
+    (p.text || '').toLowerCase().includes(query)
+  );
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:40px 20px;text-align:center;color:var(--text-muted)">Ничего не найдено</div>';
+    return;
+  }
+  list.innerHTML = '';
+  filtered.forEach((post, i) => {
+    const info = CHANNEL_INFO[post.channel_handle] || { emoji: '📢', bg: '#1a1a1a' };
+    const isBookmarked = bookmarks.has(post._key);
+    const timeAgo = getTimeAgo(post.published_at);
+    const card = document.createElement('div');
+    card.className = 'post-card';
+    card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.post_url || post.channel_handle); };
+    card.style.cursor = 'pointer';
+    const idx = currentFeedPosts.indexOf(post);
+    card.innerHTML = `
+      <div class="post-header">
+        <div class="channel-avatar" style="background:${info.bg}">${info.emoji}</div>
+        <div class="channel-info">
+          <div class="channel-name">${post.channel_title || post.channel_handle}</div>
+          <div class="post-time">${timeAgo}</div>
+        </div>
+        <button class="bookmark-btn ${isBookmarked ? 'active' : ''}" onclick="toggleBookmark(${idx}, this)">
+          ${isBookmarked ? '🔖' : '🏷️'}
+        </button>
+      </div>
+      <div class="post-text">${post.text || ''}</div>`;
+    list.appendChild(card);
+  });
 }
 
 // ===== FEED =====
