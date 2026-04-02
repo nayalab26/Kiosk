@@ -1055,17 +1055,11 @@
       <div class="kiosk-logo-icon">🗞</div>
       <div class="kiosk-logo-text">Киоск</div>
     </div>
-    <p class="onboarding-subtitle">Выбери темы — получай только то, что интересно тебе</p>
-  </div>
-
-  <div class="topics-section">
-    <div class="topics-label">Выбери темы</div>
-    <div class="topics-grid" id="topics-grid"></div>
+    <p class="onboarding-subtitle">Агрегатор лучших Telegram-каналов</p>
   </div>
 
   <div class="onboarding-footer">
-    <p class="hint-text">Выбери хотя бы одну тему</p>
-    <button class="btn-primary" id="btn-start" disabled onclick="startFeed()">
+    <button class="btn-primary" id="btn-start" onclick="startFeed()">
       Открыть ленту →
     </button>
   </div>
@@ -1268,13 +1262,11 @@ function renderFilterTabs() {
   allTab.onclick = () => setFilter('all', allTab);
   tabs.appendChild(allTab);
 
-  selectedTopics.forEach(id => {
-    const topic = TOPICS.find(t => t.id === id);
-    if (!topic) return;
+  TOPICS.forEach(topic => {
     const tab = document.createElement('div');
     tab.className = 'filter-tab';
     tab.textContent = topic.emoji + ' ' + topic.name;
-    tab.onclick = () => setFilter(id, tab);
+    tab.onclick = () => setFilter(topic.id, tab);
     tabs.appendChild(tab);
   });
 }
@@ -2029,14 +2021,9 @@ document.getElementById("screen-onboarding").classList.remove("active");
 
 loadBookmarks();
 loadTopics(() => {
-  if (selectedTopics.size > 0) {
-    showScreen("feed");
-    renderFilterTabs();
-    renderFeed("all");
-  } else {
-    showScreen("onboarding");
-    renderTopicsGrid("topics-grid");
-  }
+  showScreen("feed");
+  renderFilterTabs();
+  renderFeed("all");
 });
 </script>
 
