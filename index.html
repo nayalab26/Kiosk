@@ -1523,9 +1523,7 @@ function renderProfileUser() {
   if (bCount > 0) { bBadge.textContent = bCount; bBadge.style.display = ''; }
   else bBadge.style.display = 'none';
   // Stats row
-  const topicsCount = (window.selectedTopics || []).length;
   document.getElementById('stat-bookmarks').textContent = bCount;
-  document.getElementById('stat-topics').textContent = topicsCount;
   renderProfileLevel();
 }
 
@@ -2152,11 +2150,7 @@ loadTopics(() => {
       <div class="profile-stat-value" id="stat-bookmarks">0</div>
       <div class="profile-stat-label">Закладок</div>
     </div>
-    <div class="profile-stat">
-      <div class="profile-stat-value" id="stat-topics">0</div>
-      <div class="profile-stat-label">Тем</div>
-    </div>
-    <div class="profile-stat">
+<div class="profile-stat">
       <div class="profile-stat-value" id="stat-days">0</div>
       <div class="profile-stat-label">Дней с нами</div>
     </div>
