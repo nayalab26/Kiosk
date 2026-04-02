@@ -674,30 +674,91 @@ async def handle_admin_analytics(request):
     if not is_admin(request):
         return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
     async with httpx.AsyncClient() as client:
-        r_opens  = await client.get(f"{SUPABASE_URL}/rest/v1/app_opens?select=created_at&order=created_at.desc", headers=HEADERS)
-        r_clicks = await client.get(f"{SUPABASE_URL}/rest/v1/post_clicks?select=channel_handle,created_at&order=created_at.desc", headers=HEADERS)
-    opens  = r_opens.json()
-    clicks = r_clicks.json()
+        r_opens    = await client.get(f"{SUPABASE_URL}/rest/v1/app_opens?select=user_id,created_at&order=created_at.desc", headers=HEADERS)
+        r_pclicks  = await client.get(f"{SUPABASE_URL}/rest/v1/post_clicks?select=channel_handle,user_id,created_at", headers=HEADERS)
+        r_sclicks  = await client.get(f"{SUPABASE_URL}/rest/v1/channel_clicks?select=channel_handle,user_id,created_at", headers=HEADERS)
+        r_channels = await client.get(f"{SUPABASE_URL}/rest/v1/applications?status=eq.approved&select=handle,title,categories", headers=HEADERS)
 
-    # Group opens by date
+    opens    = r_opens.json()
+    pclicks  = r_pclicks.json()
+    sclicks  = r_sclicks.json()
+    channels = r_channels.json()
+
+    # Opens by day + unique users per day
     opens_by_day = {}
+    unique_by_day = {}
     for row in opens:
         day = row['created_at'][:10]
         opens_by_day[day] = opens_by_day.get(day, 0) + 1
+        uid = row.get('user_id')
+        if uid:
+            if day not in unique_by_day:
+                unique_by_day[day] = set()
+            unique_by_day[day].add(uid)
 
-    # Group post clicks by channel
-    clicks_by_channel = {}
-    for row in clicks:
+    # Per-channel: unique readers and unique subscribers
+    readers = {}     # handle -> set of user_ids
+    subscribers = {} # handle -> set of user_ids
+    for row in pclicks:
         h = row['channel_handle']
-        clicks_by_channel[h] = clicks_by_channel.get(h, 0) + 1
+        uid = row.get('user_id')
+        if h not in readers: readers[h] = set()
+        if uid: readers[h].add(uid)
+        else: readers[h].add(f'anon_{id(row)}')
+    for row in sclicks:
+        h = row['channel_handle']
+        uid = row.get('user_id')
+        if h not in subscribers: subscribers[h] = set()
+        if uid: subscribers[h].add(uid)
+        else: subscribers[h].add(f'anon_{id(row)}')
 
-    top_channels = sorted(clicks_by_channel.items(), key=lambda x: x[1], reverse=True)[:10]
+    # Build per-channel stats with category
+    ch_map = {c['handle']: c for c in channels}
+    channel_stats = []
+    all_handles = set(list(readers.keys()) + list(subscribers.keys()))
+    for h in all_handles:
+        r = len(readers.get(h, set()))
+        s = len(subscribers.get(h, set()))
+        conv = round(s / r * 100, 1) if r > 0 else 0
+        info = ch_map.get(h, {})
+        channel_stats.append({
+            'handle': h,
+            'title': info.get('title', h),
+            'categories': info.get('categories', ''),
+            'readers': r,
+            'subscribers': s,
+            'conversion': conv,
+        })
+    channel_stats.sort(key=lambda x: x['readers'], reverse=True)
+
+    # Category rankings
+    cat_readers = {}
+    for cs in channel_stats:
+        for cat in (cs['categories'] or '').split(','):
+            cat = cat.strip()
+            if not cat: continue
+            if cat not in cat_readers: cat_readers[cat] = []
+            cat_readers[cat].append((cs['handle'], cs['readers']))
+    rankings = {}
+    for cat, items in cat_readers.items():
+        items.sort(key=lambda x: x[1], reverse=True)
+        for rank, (h, _) in enumerate(items, 1):
+            rankings[h] = {'category': cat, 'rank': rank, 'total': len(items)}
+
+    for cs in channel_stats:
+        cs['ranking'] = rankings.get(cs['handle'])
+
+    # DAU (daily active users) last 14 days
+    dau = {day: len(uids) for day, uids in unique_by_day.items()}
 
     return web.json_response({
-        'opens_by_day': opens_by_day,
         'total_opens': len(opens),
-        'total_post_clicks': len(clicks),
-        'top_channels': [{'handle': h, 'clicks': c} for h, c in top_channels],
+        'unique_users': len({r.get('user_id') for r in opens if r.get('user_id')}),
+        'total_post_clicks': len(pclicks),
+        'total_subscribers': len(sclicks),
+        'opens_by_day': opens_by_day,
+        'dau': dau,
+        'channel_stats': channel_stats[:20],
     }, headers=ADMIN_CORS)
 
 async def handle_admin_sync(request):

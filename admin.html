@@ -143,6 +143,14 @@
   .btn-reject:hover, .btn-remove:hover { background: rgba(255,80,80,0.2); }
   button:disabled { opacity: 0.4; cursor: default; }
 
+  .section-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+  .conv-high { color: var(--green); font-weight: 700; }
+  .conv-mid  { color: var(--accent); font-weight: 700; }
+  .conv-low  { color: var(--text-muted); }
+  .bar { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-width: 8px; position: relative; cursor: default; transition: opacity 0.2s; }
+  .bar:hover { opacity: 0.8; }
+  .bar-tip { position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; font-size: 11px; white-space: nowrap; pointer-events: none; display: none; }
+  .bar:hover .bar-tip { display: block; }
   .empty-state { padding: 48px; text-align: center; color: var(--text-muted); font-size: 14px; }
   .spinner-inline { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -215,27 +223,37 @@
       <div class="section-header">
         <div class="section-title">Аналитика</div>
       </div>
+
       <div class="stats-grid" style="margin-bottom:24px">
         <div class="stat-card"><div class="stat-value" id="a-opens">—</div><div class="stat-label">Всего открытий</div></div>
-        <div class="stat-card"><div class="stat-value" id="a-clicks">—</div><div class="stat-label">Кликов по постам</div></div>
+        <div class="stat-card highlight"><div class="stat-value" id="a-unique">—</div><div class="stat-label">Уникальных пользователей</div></div>
+        <div class="stat-card"><div class="stat-value" id="a-pclicks">—</div><div class="stat-label">Кликов по постам</div></div>
+        <div class="stat-card"><div class="stat-value" id="a-subs">—</div><div class="stat-label">Подписок через Киоск</div></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">Открытия по дням</div>
+          <div class="section-label">Открытия по дням</div>
           <div class="table-wrap">
-            <table><thead><tr><th>Дата</th><th>Открытий</th></tr></thead>
-            <tbody id="a-opens-tbody"><tr><td colspan="2"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
+            <table><thead><tr><th>Дата</th><th>Открытий</th><th>Уник. польз.</th></tr></thead>
+            <tbody id="a-opens-tbody"><tr><td colspan="3"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
             </table>
           </div>
         </div>
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">Топ каналов по кликам</div>
-          <div class="table-wrap">
-            <table><thead><tr><th>Канал</th><th>Клики</th></tr></thead>
-            <tbody id="a-channels-tbody"><tr><td colspan="2"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
-            </table>
-          </div>
+          <div class="section-label">Аудитория по дням (DAU)</div>
+          <div id="a-dau-chart" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:120px;display:flex;align-items:flex-end;gap:4px"></div>
         </div>
+      </div>
+
+      <div class="section-label" style="margin-bottom:12px">Статистика каналов</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Канал</th><th>Читателей</th><th>Подписок</th><th>Конверсия</th><th>Рейтинг</th>
+          </tr></thead>
+          <tbody id="a-ch-tbody"><tr><td colspan="5"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
+        </table>
       </div>
     </div>
 
@@ -427,18 +445,52 @@ async function loadAnalytics() {
   if (!data) return;
 
   document.getElementById('a-opens').textContent  = data.total_opens;
-  document.getElementById('a-clicks').textContent = data.total_post_clicks;
+  document.getElementById('a-unique').textContent = data.unique_users;
+  document.getElementById('a-pclicks').textContent = data.total_post_clicks;
+  document.getElementById('a-subs').textContent   = data.total_subscribers;
 
-  const opensTbody = document.getElementById('a-opens-tbody');
+  // Opens by day table (last 14 days)
   const days = Object.entries(data.opens_by_day).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 14);
-  opensTbody.innerHTML = days.length
-    ? days.map(([day, cnt]) => `<tr><td>${day}</td><td><span class="click-count">${cnt}</span></td></tr>`).join('')
-    : '<tr><td colspan="2"><div class="empty-state">Нет данных</div></td></tr>';
+  const dau  = data.dau || {};
+  document.getElementById('a-opens-tbody').innerHTML = days.length
+    ? days.map(([day, cnt]) => `<tr>
+        <td>${day}</td>
+        <td><span class="click-count">${cnt}</span></td>
+        <td>${dau[day] ? `<span class="click-count">${dau[day]}</span>` : '—'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="3"><div class="empty-state">Нет данных</div></td></tr>';
 
-  const chTbody = document.getElementById('a-channels-tbody');
-  chTbody.innerHTML = data.top_channels.length
-    ? data.top_channels.map(c => `<tr><td><a class="handle" href="https://t.me/${c.handle}" target="_blank">@${c.handle}</a></td><td><span class="click-count">${c.clicks}</span></td></tr>`).join('')
-    : '<tr><td colspan="2"><div class="empty-state">Нет данных</div></td></tr>';
+  // DAU bar chart (last 14 days)
+  const chartEl = document.getElementById('a-dau-chart');
+  const chartDays = Object.entries(dau).sort((a,b) => a[0].localeCompare(b[0])).slice(-14);
+  if (chartDays.length) {
+    const maxVal = Math.max(...chartDays.map(([,v]) => v), 1);
+    chartEl.innerHTML = chartDays.map(([day, val]) => {
+      const pct = Math.max(8, Math.round(val / maxVal * 100));
+      return `<div class="bar" style="height:${pct}%">
+        <div class="bar-tip">${day}<br>${val} польз.</div>
+      </div>`;
+    }).join('');
+  } else {
+    chartEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;margin:auto">Нет данных</div>';
+  }
+
+  // Channel stats table
+  const chTbody = document.getElementById('a-ch-tbody');
+  chTbody.innerHTML = data.channel_stats?.length
+    ? data.channel_stats.map(c => {
+        const convClass = c.conversion >= 10 ? 'conv-high' : c.conversion >= 3 ? 'conv-mid' : 'conv-low';
+        const rank = c.ranking ? `#${c.ranking.rank} в ${c.ranking.category} (из ${c.ranking.total})` : '—';
+        return `<tr>
+          <td><a class="handle" href="https://t.me/${c.handle}" target="_blank">@${c.handle}</a><br>
+          <span style="font-size:12px;color:var(--text-muted)">${c.title || ''}</span></td>
+          <td><span class="click-count">${c.readers}</span></td>
+          <td><span class="click-count">${c.subscribers}</span></td>
+          <td><span class="${convClass}">${c.conversion}%</span></td>
+          <td style="font-size:12px;color:var(--text-muted)">${rank}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5"><div class="empty-state">Нет данных</div></td></tr>';
 }
 
 function showToast(msg) {
