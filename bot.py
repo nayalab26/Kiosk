@@ -761,6 +761,45 @@ async def handle_admin_analytics(request):
         'channel_stats': channel_stats[:20],
     }, headers=ADMIN_CORS)
 
+async def handle_admin_channel_detail(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    handle = request.rel_url.query.get('handle', '').strip()
+    if not handle:
+        return web.json_response({'error': 'handle required'}, status=400, headers=ADMIN_CORS)
+    async with httpx.AsyncClient() as client:
+        r_p = await client.get(
+            f"{SUPABASE_URL}/rest/v1/post_clicks?channel_handle=eq.{handle}&select=user_id,created_at&order=created_at.desc",
+            headers=HEADERS
+        )
+        r_s = await client.get(
+            f"{SUPABASE_URL}/rest/v1/channel_clicks?channel_handle=eq.{handle}&select=user_id,created_at&order=created_at.desc",
+            headers=HEADERS
+        )
+    pclicks = r_p.json()
+    sclicks = r_s.json()
+
+    # Aggregate per user
+    users = {}
+    for row in pclicks:
+        uid = str(row.get('user_id') or 'аноним')
+        if uid not in users:
+            users[uid] = {'user_id': uid, 'post_clicks': 0, 'subscribed': False, 'last_seen': row['created_at']}
+        users[uid]['post_clicks'] += 1
+        if row['created_at'] > users[uid]['last_seen']:
+            users[uid]['last_seen'] = row['created_at']
+    subscribed_ids = {str(r.get('user_id') or 'аноним') for r in sclicks}
+    for uid in users:
+        users[uid]['subscribed'] = uid in subscribed_ids
+
+    result = sorted(users.values(), key=lambda x: x['post_clicks'], reverse=True)
+    return web.json_response({
+        'handle': handle,
+        'users': result,
+        'total_clicks': len(pclicks),
+        'total_subscribers': len(sclicks),
+    }, headers=ADMIN_CORS)
+
 async def handle_admin_sync(request):
     if not is_admin(request):
         return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
@@ -783,7 +822,8 @@ async def run_web_server():
     app.router.add_post('/api/admin/reject',     handle_admin_reject)
     app.router.add_post('/api/admin/remove',     handle_admin_remove)
     app.router.add_post('/api/admin/sync',       handle_admin_sync)
-    app.router.add_get('/api/admin/analytics',   handle_admin_analytics)
+    app.router.add_get('/api/admin/analytics',      handle_admin_analytics)
+    app.router.add_get('/api/admin/channel-detail', handle_admin_channel_detail)
     app.router.add_options('/api/admin/{tail:.*}', handle_admin_options)
     runner = web.AppRunner(app)
     await runner.setup()

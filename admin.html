@@ -151,6 +151,23 @@
   .bar:hover { opacity: 0.8; }
   .bar-tip { position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 7px; font-size: 11px; white-space: nowrap; pointer-events: none; display: none; }
   .bar:hover .bar-tip { display: block; }
+  .ch-row { cursor: pointer; }
+  .ch-row:hover td { background: var(--surface2) !important; }
+  .ch-detail-row { display: none; }
+  .ch-detail-row.open { display: table-row; }
+  .ch-detail-box {
+    background: var(--surface2); border-top: 1px solid var(--border);
+    padding: 16px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .ch-detail-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+  .user-row { display: flex; align-items: center; gap: 12px; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .user-row:last-child { border-bottom: none; }
+  .user-id { font-weight: 600; color: var(--text); flex: 1; }
+  .user-clicks { color: var(--accent); font-weight: 700; min-width: 60px; }
+  .user-sub { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .user-sub.yes { background: rgba(80,200,120,0.15); color: var(--green); }
+  .user-sub.no  { background: var(--surface); color: var(--text-muted); }
+  .user-last { color: var(--text-muted); font-size: 12px; }
   .empty-state { padding: 48px; text-align: center; color: var(--text-muted); font-size: 14px; }
   .spinner-inline { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -481,16 +498,62 @@ async function loadAnalytics() {
     ? data.channel_stats.map(c => {
         const convClass = c.conversion >= 10 ? 'conv-high' : c.conversion >= 3 ? 'conv-mid' : 'conv-low';
         const rank = c.ranking ? `#${c.ranking.rank} в ${c.ranking.category} (из ${c.ranking.total})` : '—';
-        return `<tr>
-          <td><a class="handle" href="https://t.me/${c.handle}" target="_blank">@${c.handle}</a><br>
+        return `<tr class="ch-row" onclick="toggleChannelDetail('${c.handle}')">
+          <td><a class="handle" href="https://t.me/${c.handle}" target="_blank" onclick="event.stopPropagation()">@${c.handle}</a><br>
           <span style="font-size:12px;color:var(--text-muted)">${c.title || ''}</span></td>
           <td><span class="click-count">${c.readers}</span></td>
           <td><span class="click-count">${c.subscribers}</span></td>
           <td><span class="${convClass}">${c.conversion}%</span></td>
           <td style="font-size:12px;color:var(--text-muted)">${rank}</td>
+        </tr>
+        <tr class="ch-detail-row" id="detail-${c.handle}">
+          <td colspan="5"><div class="ch-detail-box" id="detail-box-${c.handle}">
+            <div class="ch-detail-title">Загрузка...</div>
+          </div></td>
         </tr>`;
       }).join('')
     : '<tr><td colspan="5"><div class="empty-state">Нет данных</div></td></tr>';
+}
+
+const loadedDetails = {};
+
+async function toggleChannelDetail(handle) {
+  const row = document.getElementById(`detail-${handle}`);
+  const box = document.getElementById(`detail-box-${handle}`);
+  const isOpen = row.classList.toggle('open');
+  if (!isOpen) return;
+
+  if (loadedDetails[handle]) {
+    renderDetail(box, loadedDetails[handle]);
+    return;
+  }
+
+  box.innerHTML = '<div class="ch-detail-title"><span class="spinner-inline"></span> Загрузка...</div>';
+  const data = await apiGet(`/api/admin/channel-detail?handle=${handle}`);
+  if (!data) return;
+  loadedDetails[handle] = data;
+  renderDetail(box, data);
+}
+
+function renderDetail(box, data) {
+  const users = data.users || [];
+  if (!users.length) {
+    box.innerHTML = '<div class="ch-detail-title">Нет данных о пользователях</div>';
+    return;
+  }
+  const rows = users.map(u => {
+    const lastDate = u.last_seen ? u.last_seen.slice(0,10) : '—';
+    const subLabel = u.subscribed ? '<span class="user-sub yes">подписан</span>' : '<span class="user-sub no">не подписан</span>';
+    return `<div class="user-row">
+      <div class="user-id">ID: ${u.user_id}</div>
+      <div class="user-clicks">${u.post_clicks} кликов</div>
+      ${subLabel}
+      <div class="user-last">${lastDate}</div>
+    </div>`;
+  }).join('');
+  box.innerHTML = `
+    <div class="ch-detail-title">Читатели @${data.handle} — ${users.length} уникальных</div>
+    ${rows}`;
 }
 
 function showToast(msg) {
