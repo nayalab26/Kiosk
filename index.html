@@ -1294,6 +1294,7 @@ async function renderFeed(filter) {
   try {
     // Get approved channels for selected topics
     const topicsToShow = filter === 'all' ? [...selectedTopics] : [filter];
+    const showAll = filter === 'all' && topicsToShow.length === 0;
 
     // Fetch approved channels
     const chRes = await fetch(
@@ -1302,9 +1303,10 @@ async function renderFeed(filter) {
     );
     const channels = await chRes.json();
 
-    // Filter channels by selected topics
+    // Filter channels by selected topics (or show all if no topics selected)
     const relevantHandles = channels
       .filter(ch => {
+        if (showAll) return true;
         const cats = (ch.categories || '').toLowerCase();
         return topicsToShow.some(id => {
           const topic = TOPICS.find(t => t.id === id);
@@ -1402,7 +1404,8 @@ function renderSampleFeed(filter) {
   const list = document.getElementById('feed-list');
   let posts = [];
   const topicsToShow = filter === 'all' ? [...selectedTopics] : [filter];
-  topicsToShow.forEach(id => {
+  const allTopicIds = topicsToShow.length === 0 && filter === 'all' ? TOPICS.map(t => t.id) : topicsToShow;
+  allTopicIds.forEach(id => {
     const topicPosts = SAMPLE_POSTS[id] || [];
     const seen = new Set();
     topicPosts.forEach(p => {
