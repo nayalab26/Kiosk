@@ -1361,7 +1361,7 @@ function renderSearchResults(query) {
     const timeAgo = getTimeAgo(post.published_at);
     const card = document.createElement('div');
     card.className = 'post-card';
-    card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.post_url || post.channel_handle); };
+    card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.post_url || post.channel_handle, post.channel_handle); };
     card.style.cursor = 'pointer';
     const idx = currentFeedPosts.indexOf(post);
     card.innerHTML = `
@@ -1454,7 +1454,7 @@ async function renderFeed(filter) {
       const card = document.createElement('div');
       card.className = 'post-card';
       card.style.animationDelay = (i * 0.05) + 's';
-      card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.post_url || post.channel_handle); };
+      card.onclick = (e) => { if (!e.target.closest('button')) readInTelegram(post.post_url || post.channel_handle, post.channel_handle); };
       card.style.cursor = 'pointer';
       card.innerHTML = `
         <div class="post-header">
@@ -1875,7 +1875,7 @@ function renderBookmarks() {
     const card = document.createElement('div');
     card.className = 'post-card';
     const url = post.post_url || post.channel_handle || post.handle;
-    card.onclick = function(e) { if (!e.target.closest('button')) readInTelegram(url); };
+    card.onclick = function(e) { if (!e.target.closest('button')) readInTelegram(url, post.channel_handle || post.handle); };
     card.style.cursor = 'pointer';
     card.innerHTML = `
       <div class="post-header">
@@ -2028,7 +2028,14 @@ function toggleSubscribeChannel(handle) {
   }
 }
 
-function readInTelegram(urlOrHandle) {
+function readInTelegram(urlOrHandle, channelHandle) {
+  if (channelHandle) {
+    fetch(`${SUPABASE_URL}/rest/v1/post_clicks`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_handle: channelHandle })
+    }).catch(() => {});
+  }
   const url = urlOrHandle.startsWith('http') ? urlOrHandle : `https://t.me/${urlOrHandle}`;
   if (window.Telegram?.WebApp) {
     if (url.includes('t.me/')) {
@@ -2218,6 +2225,13 @@ function loadTopics(callback) {
 
 // ===== INIT =====
 document.getElementById("screen-onboarding").classList.remove("active");
+
+// Track app open
+fetch(`${SUPABASE_URL}/rest/v1/app_opens`, {
+  method: 'POST',
+  headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+}).catch(() => {});
 
 loadBookmarks();
 loadSubscriptions();

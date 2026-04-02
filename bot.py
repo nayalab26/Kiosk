@@ -670,6 +670,36 @@ async def handle_admin_remove(request):
         await client.delete(f"{SUPABASE_URL}/rest/v1/posts?channel_handle=eq.{handle}", headers=SERVICE_HEADERS)
     return web.json_response({'ok': True}, headers=ADMIN_CORS)
 
+async def handle_admin_analytics(request):
+    if not is_admin(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
+    async with httpx.AsyncClient() as client:
+        r_opens  = await client.get(f"{SUPABASE_URL}/rest/v1/app_opens?select=created_at&order=created_at.desc", headers=HEADERS)
+        r_clicks = await client.get(f"{SUPABASE_URL}/rest/v1/post_clicks?select=channel_handle,created_at&order=created_at.desc", headers=HEADERS)
+    opens  = r_opens.json()
+    clicks = r_clicks.json()
+
+    # Group opens by date
+    opens_by_day = {}
+    for row in opens:
+        day = row['created_at'][:10]
+        opens_by_day[day] = opens_by_day.get(day, 0) + 1
+
+    # Group post clicks by channel
+    clicks_by_channel = {}
+    for row in clicks:
+        h = row['channel_handle']
+        clicks_by_channel[h] = clicks_by_channel.get(h, 0) + 1
+
+    top_channels = sorted(clicks_by_channel.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    return web.json_response({
+        'opens_by_day': opens_by_day,
+        'total_opens': len(opens),
+        'total_post_clicks': len(clicks),
+        'top_channels': [{'handle': h, 'clicks': c} for h, c in top_channels],
+    }, headers=ADMIN_CORS)
+
 async def handle_admin_sync(request):
     if not is_admin(request):
         return web.json_response({'error': 'Unauthorized'}, status=401, headers=ADMIN_CORS)
@@ -692,6 +722,7 @@ async def run_web_server():
     app.router.add_post('/api/admin/reject',     handle_admin_reject)
     app.router.add_post('/api/admin/remove',     handle_admin_remove)
     app.router.add_post('/api/admin/sync',       handle_admin_sync)
+    app.router.add_get('/api/admin/analytics',   handle_admin_analytics)
     app.router.add_options('/api/admin/{tail:.*}', handle_admin_options)
     runner = web.AppRunner(app)
     await runner.setup()

@@ -191,6 +191,7 @@
     <div class="tabs">
       <div class="tab active" onclick="switchTab('applications')">Заявки <span class="tab-badge" id="pending-badge" style="display:none"></span></div>
       <div class="tab" onclick="switchTab('channels')">Каналы</div>
+      <div class="tab" onclick="switchTab('analytics')">Аналитика</div>
     </div>
 
     <!-- Applications -->
@@ -206,6 +207,35 @@
           </tr></thead>
           <tbody id="apps-tbody"><tr><td colspan="7"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- Analytics -->
+    <div class="section" id="section-analytics">
+      <div class="section-header">
+        <div class="section-title">Аналитика</div>
+      </div>
+      <div class="stats-grid" style="margin-bottom:24px">
+        <div class="stat-card"><div class="stat-value" id="a-opens">—</div><div class="stat-label">Всего открытий</div></div>
+        <div class="stat-card"><div class="stat-value" id="a-clicks">—</div><div class="stat-label">Кликов по постам</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">Открытия по дням</div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Дата</th><th>Открытий</th></tr></thead>
+            <tbody id="a-opens-tbody"><tr><td colspan="2"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">Топ каналов по кликам</div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Канал</th><th>Клики</th></tr></thead>
+            <tbody id="a-channels-tbody"><tr><td colspan="2"><div class="empty-state"><span class="spinner-inline"></span></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -386,9 +416,29 @@ async function doSync() {
 }
 
 function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['applications','channels'][i] === tab));
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['applications','channels','analytics'][i] === tab));
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('section-' + tab).classList.add('active');
+  if (tab === 'analytics') loadAnalytics();
+}
+
+async function loadAnalytics() {
+  const data = await apiGet('/api/admin/analytics');
+  if (!data) return;
+
+  document.getElementById('a-opens').textContent  = data.total_opens;
+  document.getElementById('a-clicks').textContent = data.total_post_clicks;
+
+  const opensTbody = document.getElementById('a-opens-tbody');
+  const days = Object.entries(data.opens_by_day).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 14);
+  opensTbody.innerHTML = days.length
+    ? days.map(([day, cnt]) => `<tr><td>${day}</td><td><span class="click-count">${cnt}</span></td></tr>`).join('')
+    : '<tr><td colspan="2"><div class="empty-state">Нет данных</div></td></tr>';
+
+  const chTbody = document.getElementById('a-channels-tbody');
+  chTbody.innerHTML = data.top_channels.length
+    ? data.top_channels.map(c => `<tr><td><a class="handle" href="https://t.me/${c.handle}" target="_blank">@${c.handle}</a></td><td><span class="click-count">${c.clicks}</span></td></tr>`).join('')
+    : '<tr><td colspan="2"><div class="empty-state">Нет данных</div></td></tr>';
 }
 
 function showToast(msg) {
