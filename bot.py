@@ -178,6 +178,28 @@ async def daily_digest_scheduler(bot):
 
 # ===== BOT HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    # Handle referral link: /start ref_USERID
+    if context.args and context.args[0].startswith("ref_"):
+        try:
+            referrer_id = int(context.args[0][4:])
+            if referrer_id != user_id:
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        f"{SUPABASE_URL}/rest/v1/referrals",
+                        headers={**HEADERS, "Prefer": "resolution=ignore-duplicates"},
+                        json={"referrer_id": referrer_id, "referee_id": user_id}
+                    )
+                try:
+                    name = update.effective_user.first_name or "Пользователь"
+                    await context.bot.send_message(
+                        referrer_id,
+                        f"По твоей реферальной ссылке зарегистрировался {name}!"
+                    )
+                except Exception:
+                    pass
+        except (ValueError, IndexError):
+            pass
     keyboard = [[InlineKeyboardButton(text="Открыть Киоск", web_app=WebAppInfo(url=WEBAPP_URL))]]
     await update.message.reply_text(
         "Привет! Я Киоск — твоя персональная лента Telegram-каналов.\n\nНажми кнопку чтобы открыть ленту:",

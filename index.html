@@ -1490,6 +1490,7 @@ function showProfile() {
   showScreen('profile');
   renderProfileUser();
   loadUserApplications();
+  loadReferralCount();
 }
 
 function renderProfileUser() {
@@ -1605,6 +1606,46 @@ function showAbout() {
     message: 'Киоск — агрегатор Telegram-каналов.\nВерсия 1.1 · Апрель 2026',
     buttons: [{ type: 'close' }]
   });
+}
+
+function showReferral() {
+  const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  if (!userId) {
+    window.Telegram?.WebApp?.showPopup({ title: 'Ошибка', message: 'Откройте приложение через Telegram', buttons: [{ type: 'close' }] });
+    return;
+  }
+  const link = `https://t.me/Kiosk_lenta_Bot?start=ref_${userId}`;
+  const text = `Читаю лучшие Telegram-каналы в Киоске — попробуй!`;
+  window.Telegram?.WebApp?.showPopup({
+    title: 'Пригласить друзей',
+    message: `Твоя реферальная ссылка:\n${link}\n\nПоделись с друзьями — они сразу попадут в Киоск.`,
+    buttons: [
+      { id: 'share', type: 'default', text: 'Поделиться' },
+      { type: 'close', text: 'Закрыть' }
+    ]
+  }, (btnId) => {
+    if (btnId === 'share') {
+      window.Telegram?.WebApp?.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+    }
+  });
+}
+
+async function loadReferralCount() {
+  const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  if (!userId) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/referrals?referrer_id=eq.${userId}&select=referee_id`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    const rows = await res.json();
+    const count = Array.isArray(rows) ? rows.length : 0;
+    const badge = document.getElementById('referral-count-badge');
+    if (count > 0) {
+      badge.textContent = count + ' друг' + (count === 1 ? '' : count < 5 ? 'а' : 'ей');
+      badge.style.display = '';
+    }
+  } catch(e) {}
 }
 
 // ===== BOOKMARKS =====
@@ -2172,6 +2213,13 @@ loadTopics(() => {
     </div>
     <div class="profile-apps" id="profile-apps">
       <div class="profile-app-row" style="color:var(--text-muted);font-size:13px">Загрузка...</div>
+    </div>
+
+    <div class="profile-menu-item" onclick="showReferral()">
+      <div class="profile-menu-icon">👥</div>
+      <div class="profile-menu-text">Пригласить друзей</div>
+      <div class="profile-menu-status status-approved" id="referral-count-badge" style="display:none"></div>
+      <div class="profile-menu-arrow">›</div>
     </div>
 
     <div class="profile-menu-item" onclick="showSettings()">
